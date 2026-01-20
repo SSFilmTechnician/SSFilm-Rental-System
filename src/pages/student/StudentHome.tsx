@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "../../lib/supabase";
+// import { supabase } from "../../lib/supabase"; // 삭제 또는 주석
 import { EquipmentCard } from "../../components/equipment/EquipmentCard";
 
 interface Equipment {
@@ -27,26 +27,17 @@ export default function StudentHome() {
   } = useQuery<Equipment[]>({
     queryKey: ["equipment", selectedCategory],
     queryFn: async () => {
-      let query = supabase
-        .from("equipment_masters") // ← equipment_masters (복수형)
-        .select("*")
-        .eq("status", "available")
-        .order("name");
+      // [Convex 마이그레이션 임시 조치]
+      // Supabase 쿼리 제거 및 빈 배열 반환
 
-      // 카테고리 필터
-      if (selectedCategory !== "all") {
-        query = query.eq("category_id", selectedCategory);
-      }
-
+      /*
+      let query = supabase.from("equipment_masters").select("*")...
       const { data, error } = await query;
-
-      if (error) {
-        console.error("Supabase 에러:", error);
-        throw error;
-      }
-
-      console.log("가져온 데이터:", data); // 디버깅용
+      if (error) throw error;
       return (data || []) as Equipment[];
+      */
+
+      return []; // 빈 배열 반환하여 렌더링 에러 방지
     },
   });
 
@@ -119,7 +110,7 @@ export default function StudentHome() {
           </div>
         </div>
 
-        {/* 제조사 필터 */}
+        {/* 제조사 필터 (데이터 없으면 숨김 처리됨) */}
         {manufacturers.length > 0 && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">제조사</h3>
@@ -157,7 +148,7 @@ export default function StudentHome() {
             총{" "}
             <span className="font-semibold text-gray-900">
               {filteredEquipment.length}
-            </span>
+            </span>{" "}
             개 장비
           </p>
         </div>
@@ -187,10 +178,10 @@ export default function StudentHome() {
         ) : (
           <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
             <p className="text-gray-500 text-lg mb-2">
-              선택한 조건의 장비가 없습니다.
+              등록된 장비가 없습니다.
             </p>
             <p className="text-gray-400 text-sm">
-              다른 카테고리나 제조사를 선택해보세요.
+              (현재 데이터 마이그레이션 중입니다)
             </p>
           </div>
         )}

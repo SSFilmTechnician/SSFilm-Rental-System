@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../../lib/supabase";
+// import { supabase } from "../../lib/supabase"; // 삭제 또는 주석
 import { User, LogOut, Phone, Mail, GraduationCap } from "lucide-react";
 
 interface UserProfile {
@@ -18,23 +18,20 @@ export default function StudentDashboard() {
   useEffect(() => {
     async function fetchProfile() {
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          navigate("/login");
-          return;
-        }
+        // [Convex 마이그레이션 임시 조치]
+        // Supabase에서 데이터를 가져오는 대신 임시 데이터 설정
 
-        // 프로필 정보만 가져오기
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("name, student_id, phone, email")
-          .eq("id", user.id)
-          .single();
+        /* const { data: { user } } = await supabase.auth.getUser();
+        // ... 기존 로직 주석 처리
+        */
 
-        if (error) throw error;
-        setProfile(data);
+        // 임시 더미 데이터 (화면 확인용)
+        setProfile({
+          name: "마이그레이션 중",
+          student_id: "2024XXXX",
+          phone: "010-XXXX-XXXX",
+          email: "migration@ssfilm.ac.kr",
+        });
       } catch (error) {
         console.error("프로필 불러오기 실패:", error);
       } finally {
@@ -46,9 +43,9 @@ export default function StudentDashboard() {
   }, [navigate]);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    // await supabase.auth.signOut(); // 주석 처리
     navigate("/");
-    alert("로그아웃 되었습니다.");
+    alert("로그아웃 되었습니다. (임시)");
   };
 
   if (loading)
@@ -80,7 +77,7 @@ export default function StudentDashboard() {
                 {profile?.name}
               </h1>
               <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold tracking-wide">
-                STUDENT
+                STUDENT (MIGRATION)
               </span>
             </div>
 

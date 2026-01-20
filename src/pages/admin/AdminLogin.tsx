@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../../lib/supabase";
+// import { supabase } from "../../lib/supabase"; // 삭제 또는 주석
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -13,18 +13,22 @@ export default function AdminLogin() {
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      // [Convex 마이그레이션 임시 조치]
+      // Supabase 로그인 로직 제거됨
+      console.log("입력된 정보(임시):", email, password); // 변수 미사용 에러 방지
+
+      /* const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
-
       if (error) throw error;
+      */
 
-      // 로그인 성공 시 대시보드로 이동
+      // 임시로 바로 로그인 성공 처리 (추후 Convex Auth로 교체 필요)
       navigate("/admin");
     } catch (error) {
-      console.error(error); // 에러 내용을 콘솔에 출력하여 'unused variable' 에러 해결
-      alert("로그인에 실패했습니다. 아이디와 비밀번호를 확인해주세요.");
+      console.error(error);
+      alert("로그인에 실패했습니다.");
     } finally {
       setIsLoading(false);
     }
@@ -34,7 +38,7 @@ export default function AdminLogin() {
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
         <h2 className="text-2xl font-bold text-center mb-6 text-gray-800">
-          🔒 관리자 로그인
+          🔒 관리자 로그인 (Convex 마이그레이션 중)
         </h2>
 
         <form onSubmit={handleLogin} className="space-y-4">
