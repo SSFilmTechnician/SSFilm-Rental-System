@@ -39,11 +39,14 @@ export default defineSchema({
   // 4. 개별 자산(Asset) 테이블
   assets: defineTable({
     equipmentId: v.id("equipment"),
-    serialNumber: v.optional(v.string()),
+    serialNumber: v.optional(v.string()),  // 시리얼 번호 (A, B, 1, 2 등)
     managementCode: v.optional(v.string()),
-    status: v.string(),
+    status: v.string(),  // "available" | "rented" | "maintenance"
     note: v.optional(v.string()),
-  }).index("by_equipmentId", ["equipmentId"]),
+    createdAt: v.optional(v.number()),
+    updatedAt: v.optional(v.number()),
+  }).index("by_equipmentId", ["equipmentId"])
+    .index("by_status", ["status"]),
 
   // 5. 예약 테이블
   reservations: defineTable({
@@ -64,6 +67,7 @@ export default defineSchema({
         name: v.string(),
         checkedOut: v.boolean(),
         returned: v.boolean(),
+        assignedAssets: v.optional(v.array(v.id("assets"))),  // 배정된 개별 장비
       })
     ),
   })
@@ -81,7 +85,20 @@ export default defineSchema({
     isFixed: v.boolean(),
   }).index("by_reservationId", ["reservationId"]),
 
-  // 7. 알림 테이블
+  // 7. 장비 이력 테이블 (대여/반납 기록)
+  assetHistory: defineTable({
+    assetId: v.id("assets"),
+    reservationId: v.id("reservations"),
+    userId: v.id("users"),
+    action: v.string(),  // "rented" | "returned"
+    returnCondition: v.optional(v.string()),  // "normal" | "damaged" | "missing_parts"
+    returnNotes: v.optional(v.string()),
+    timestamp: v.number(),
+  })
+    .index("by_assetId", ["assetId"])
+    .index("by_reservationId", ["reservationId"]),
+
+  // 8. 알림 테이블
   notifications: defineTable({
     userId: v.id("users"),
     type: v.string(), // "reservation_approved", "reservation_rejected", "reservation_rented", "reservation_returned"

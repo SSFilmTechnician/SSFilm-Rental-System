@@ -18,6 +18,8 @@ interface PrintItem {
   checkedOut: boolean;
   returned: boolean;
   equipment: EquipmentDetail | null;
+  assignedSerialNumbers?: string[];
+  serialNumber?: string;  // 개별 아이템용
 }
 
 interface PrintReservation {
@@ -71,10 +73,21 @@ export default function ReservationPrint() {
     const items: PrintItem[] = [];
     sortedItems.forEach((item) => {
       if (item.equipment?.isGroupPrint) {
-        items.push(item);
+        // 그룹 인쇄: 모든 시리얼 번호를 쉼표로 연결
+        items.push({
+          ...item,
+          serialNumber: item.assignedSerialNumbers?.join(", ") || "",
+        });
       } else {
-        for (let i = 0; i < item.quantity; i++)
-          items.push({ ...item, quantity: 1 });
+        // 개별 인쇄: 각 시리얼 번호별로 행 생성
+        const serials = item.assignedSerialNumbers || [];
+        for (let i = 0; i < item.quantity; i++) {
+          items.push({
+            ...item,
+            quantity: 1,
+            serialNumber: serials[i] || "",  // 배정된 번호가 있으면 사용
+          });
+        }
       }
     });
     return items;
@@ -271,7 +284,9 @@ export default function ReservationPrint() {
                   </td>
                   {isRental && (
                     <>
-                      <td className="border border-gray-300 p-2 text-center"></td>
+                      <td className="border border-gray-300 p-2 text-center font-mono font-bold">
+                        {item.serialNumber || ""}
+                      </td>
                       <td className="border border-gray-300 p-2 text-center">
                         <div className="w-4 h-4 border border-gray-400 mx-auto"></div>
                       </td>

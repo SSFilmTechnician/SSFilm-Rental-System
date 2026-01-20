@@ -8,7 +8,8 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "strict": true
+    "strict": true,
+    "jsx": "react-jsx"
   },
   "include": ["src", "convex"]
 }

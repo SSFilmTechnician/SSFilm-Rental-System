@@ -20,16 +20,20 @@ import {
   Minus,
   Check,
   AlertCircle,
+  Package,
 } from "lucide-react";
 import { useAuth } from "@clerk/clerk-react";
 // ✅ [추가] useCartStore를 사용하기 위해 Import
 import { useCartStore } from "../../stores/useCartStore";
+import AssetManagement from "./AssetManagement";
+import AssetAssignmentModal from "../../components/admin/AssetAssignmentModal";
+import AssetReturnModal from "../../components/admin/AssetReturnModal";
 
 // ----------------------------------------------------
 // 1. 타입 정의
 // ----------------------------------------------------
 type FilterStatus = "pending" | "active" | "history" | "all";
-type ActiveTab = "reservations" | "users" | "repairs";
+type ActiveTab = "reservations" | "users" | "repairs" | "assets";
 type UserTab = "all" | "pending";
 
 interface EquipmentData {
@@ -94,6 +98,16 @@ export default function AdminDashboard() {
   const [equipmentSearchTerm, setEquipmentSearchTerm] = useState("");
   const [selectedEquipmentToAdd, setSelectedEquipmentToAdd] =
     useState<string>("");
+
+  // 장비 배정 모달 상태
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [assigningReservation, setAssigningReservation] =
+    useState<ReservationData | null>(null);
+
+  // 반납 모달 상태
+  const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+  const [returningReservation, setReturningReservation] =
+    useState<ReservationData | null>(null);
 
   // ----------------------------------------------------
   // 2. Convex 데이터 불러오기
@@ -508,6 +522,16 @@ export default function AdminDashboard() {
         >
           <Wrench className="w-5 h-5" /> 수리사항
         </button>
+        <button
+          onClick={() => setActiveTab("assets")}
+          className={`pb-3 text-lg font-bold flex gap-2 whitespace-nowrap ${
+            activeTab === "assets"
+              ? "border-b-2 border-black"
+              : "text-gray-400 hover:text-gray-600"
+          }`}
+        >
+          <Package className="w-5 h-5" /> 장비 관리
+        </button>
       </div>
 
       {/* TAB 1: 예약 관리 */}
@@ -694,9 +718,10 @@ export default function AdminDashboard() {
                             거절
                           </button>
                           <button
-                            onClick={() =>
-                              handleStatusChange(res._id, "approved")
-                            }
+                            onClick={() => {
+                              setAssigningReservation(res);
+                              setIsAssignModalOpen(true);
+                            }}
                             className="px-4 py-1.5 bg-blue-600 text-white rounded text-sm font-bold shadow-sm"
                           >
                             승인
@@ -713,13 +738,10 @@ export default function AdminDashboard() {
                       )}
                       {res.status === "rented" && (
                         <button
-                          onClick={() =>
-                            handleStatusChange(
-                              res._id,
-                              "returned",
-                              returnNotes[res._id]
-                            )
-                          }
+                          onClick={() => {
+                            setReturningReservation(res);
+                            setIsReturnModalOpen(true);
+                          }}
                           className="px-4 py-1.5 bg-gray-800 text-white rounded text-sm font-bold shadow-sm"
                         >
                           반납 확인
@@ -968,6 +990,9 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {/* TAB 4: 장비 관리 */}
+      {activeTab === "assets" && <AssetManagement />}
+
       {/* 예약 수정 모달 */}
       {isEditModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -1079,6 +1104,48 @@ export default function AdminDashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 장비 배정 모달 */}
+      {assigningReservation && (
+        <AssetAssignmentModal
+          isOpen={isAssignModalOpen}
+          onClose={() => {
+            setIsAssignModalOpen(false);
+            setAssigningReservation(null);
+          }}
+          reservationId={assigningReservation._id}
+          items={assigningReservation.items}
+          onAssignComplete={async () => {
+            // 배정 완료 후 상태 변경
+            await handleStatusChange(assigningReservation._id, "approved");
+            setIsAssignModalOpen(false);
+            setAssigningReservation(null);
+          }}
+        />
+      )}
+
+      {/* 반납 모달 */}
+      {returningReservation && (
+        <AssetReturnModal
+          isOpen={isReturnModalOpen}
+          onClose={() => {
+            setIsReturnModalOpen(false);
+            setReturningReservation(null);
+          }}
+          reservationId={returningReservation._id}
+          items={returningReservation.items}
+          onReturnComplete={async () => {
+            // 반납 완료 후 상태 변경
+            await handleStatusChange(
+              returningReservation._id,
+              "returned",
+              returnNotes[returningReservation._id]
+            );
+            setIsReturnModalOpen(false);
+            setReturningReservation(null);
+          }}
+        />
       )}
     </div>
   );
