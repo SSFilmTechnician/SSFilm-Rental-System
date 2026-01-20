@@ -22,12 +22,13 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useAuth } from "@clerk/clerk-react";
+// ✅ [추가] useCartStore를 사용하기 위해 Import
+import { useCartStore } from "../../stores/useCartStore";
 
 // ----------------------------------------------------
 // 1. 타입 정의
 // ----------------------------------------------------
 type FilterStatus = "pending" | "active" | "history" | "all";
-// ✅ 재고 탭 제거됨
 type ActiveTab = "reservations" | "users" | "repairs";
 type UserTab = "all" | "pending";
 
@@ -122,8 +123,16 @@ export default function AdminDashboard() {
   const createNotification = useMutation(api.notifications.create);
 
   // ----------------------------------------------------
-  // 4. 권한 체크
+  // 4. 권한 및 초기화 체크
   // ----------------------------------------------------
+
+  // ✅ 안전장치: 컴포넌트 마운트 시에도 장바구니 비우기 시도
+  useEffect(() => {
+    localStorage.removeItem("cart"); // 구버전 삭제
+    // useCartStore 초기화는 아래 logout에서 처리하지만, 혹시 모르니 로컬스토리지 청소
+    window.dispatchEvent(new Event("storage"));
+  }, []);
+
   useEffect(() => {
     if (myProfile !== undefined) {
       if (!myProfile || myProfile.role !== "admin") {
@@ -152,10 +161,17 @@ export default function AdminDashboard() {
   // 5. 핸들러 함수들
   // ----------------------------------------------------
 
-  // ✅ [유지] 로그아웃 시 장바구니 초기화 (요청하신 기능)
   const handleLogout = async () => {
+    // ✅ [수정됨] useCartStore를 실제로 사용하여 에러 해결 & 장바구니 초기화
+
+    // 1. Zustand 메모리 비우기
+    useCartStore.getState().clearCart();
+
+    // 2. 로컬 스토리지 데이터 삭제
+    localStorage.removeItem("cart-storage");
     localStorage.removeItem("cart");
     window.dispatchEvent(new Event("storage"));
+
     await signOut();
     navigate("/");
   };
@@ -172,23 +188,16 @@ export default function AdminDashboard() {
     status: string,
     repairNote?: string
   ) => {
-    const confirmMsg =
-      status === "rejected"
-        ? "정말 거절하시겠습니까?"
-        : status === "returned"
-          ? "반납 처리를 진행하시겠습니까?"
-          : "상태를 변경하시겠습니까?";
+    const confirmMsg = `상태를 '${getStatusLabel(status)}'(으)로 변경하시겠습니까?`;
 
     if (!confirm(confirmMsg)) return;
 
     try {
-      // 예약 정보 가져오기 (알림 생성용)
       const reservation = reservations?.find((r) => r._id === id);
 
       await updateResStatus({ id, status, repairNote });
-      alert("상태가 변경되었습니다.");
 
-      // 상태 변경에 따른 알림 생성
+      // 알림 생성 로직
       if (reservation) {
         let notificationTitle = "";
         let notificationMessage = "";
@@ -233,6 +242,26 @@ export default function AdminDashboard() {
       }
     } catch (e) {
       alert("오류 발생: " + e);
+    }
+  };
+
+  // 상태 라벨 헬퍼 함수
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "승인 대기";
+      case "approved":
+        return "예약 승인";
+      case "rented":
+        return "대여중 (반출)";
+      case "returned":
+        return "반납 완료";
+      case "rejected":
+        return "거절됨";
+      case "cancelled":
+        return "취소됨";
+      default:
+        return status;
     }
   };
 
@@ -598,73 +627,105 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
-                  <div className="px-6 py-3 bg-gray-50 border-t flex flex-wrap justify-end gap-2 items-center">
-                    {(res.status === "approved" || res.status === "rented") && (
-                      <button
-                        onClick={() =>
-                          window.open(`/print/reservation/${res._id}`, "_blank")
-                        }
-                        className="flex gap-1 px-3 py-1.5 border bg-white rounded text-sm hover:bg-gray-50"
-                      >
-                        <Printer className="w-4 h-4" /> 예약 장비리스트
-                      </button>
-                    )}
-                    {res.status === "rented" && (
-                      <button
-                        onClick={() =>
-                          window.open(
-                            `/print/reservation/${res._id}?type=rental`,
-                            "_blank"
-                          )
-                        }
-                        className="flex gap-1 px-3 py-1.5 bg-gray-900 text-white rounded text-sm hover:bg-gray-700 transition-colors"
-                      >
-                        <Printer className="w-4 h-4" /> 반출 장비리스트
-                      </button>
-                    )}
-                    <div className="w-px h-4 bg-gray-300 mx-2"></div>
-                    {res.status === "pending" && (
-                      <>
-                        <button
-                          onClick={() =>
-                            handleStatusChange(res._id, "rejected")
-                          }
-                          className="px-4 py-1.5 border border-red-200 text-red-600 rounded text-sm hover:bg-red-50"
-                        >
-                          거절
-                        </button>
-                        <button
-                          onClick={() =>
-                            handleStatusChange(res._id, "approved")
-                          }
-                          className="px-4 py-1.5 bg-blue-600 text-white rounded text-sm font-bold shadow-sm"
-                        >
-                          승인
-                        </button>
-                      </>
-                    )}
-                    {res.status === "approved" && (
-                      <button
-                        onClick={() => handleStatusChange(res._id, "rented")}
-                        className="px-4 py-1.5 bg-green-600 text-white rounded text-sm font-bold shadow-sm"
-                      >
-                        반출 처리
-                      </button>
-                    )}
-                    {res.status === "rented" && (
-                      <button
-                        onClick={() =>
+                  <div className="px-6 py-3 bg-gray-50 border-t flex flex-wrap justify-between items-center gap-4">
+                    {/* 상태 변경 드롭박스 */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-gray-500 uppercase">
+                        상태 변경:
+                      </span>
+                      <select
+                        className="text-sm border border-gray-300 rounded px-2 py-1.5 bg-white focus:ring-2 focus:ring-black focus:outline-none cursor-pointer"
+                        value={res.status}
+                        onChange={(e) =>
                           handleStatusChange(
                             res._id,
-                            "returned",
+                            e.target.value,
                             returnNotes[res._id]
                           )
                         }
-                        className="px-4 py-1.5 bg-gray-800 text-white rounded text-sm font-bold shadow-sm"
                       >
-                        반납 확인
-                      </button>
-                    )}
+                        <option value="pending">승인 대기</option>
+                        <option value="approved">예약 승인 (반출 전)</option>
+                        <option value="rented">대여중 (반출 완료)</option>
+                        <option value="returned">반납 완료</option>
+                        <option value="rejected">거절됨</option>
+                        <option value="cancelled">취소됨</option>
+                      </select>
+                    </div>
+
+                    <div className="flex gap-2 items-center">
+                      {(res.status === "approved" ||
+                        res.status === "rented") && (
+                        <button
+                          onClick={() =>
+                            window.open(
+                              `/print/reservation/${res._id}`,
+                              "_blank"
+                            )
+                          }
+                          className="flex gap-1 px-3 py-1.5 border bg-white rounded text-sm hover:bg-gray-50"
+                        >
+                          <Printer className="w-4 h-4" /> 예약 리스트
+                        </button>
+                      )}
+                      {res.status === "rented" && (
+                        <button
+                          onClick={() =>
+                            window.open(
+                              `/print/reservation/${res._id}?type=rental`,
+                              "_blank"
+                            )
+                          }
+                          className="flex gap-1 px-3 py-1.5 bg-gray-900 text-white rounded text-sm hover:bg-gray-700 transition-colors"
+                        >
+                          <Printer className="w-4 h-4" /> 반출 리스트
+                        </button>
+                      )}
+
+                      <div className="w-px h-4 bg-gray-300 mx-2"></div>
+                      {res.status === "pending" && (
+                        <>
+                          <button
+                            onClick={() =>
+                              handleStatusChange(res._id, "rejected")
+                            }
+                            className="px-4 py-1.5 border border-red-200 text-red-600 rounded text-sm hover:bg-red-50"
+                          >
+                            거절
+                          </button>
+                          <button
+                            onClick={() =>
+                              handleStatusChange(res._id, "approved")
+                            }
+                            className="px-4 py-1.5 bg-blue-600 text-white rounded text-sm font-bold shadow-sm"
+                          >
+                            승인
+                          </button>
+                        </>
+                      )}
+                      {res.status === "approved" && (
+                        <button
+                          onClick={() => handleStatusChange(res._id, "rented")}
+                          className="px-4 py-1.5 bg-green-600 text-white rounded text-sm font-bold shadow-sm"
+                        >
+                          반출 처리
+                        </button>
+                      )}
+                      {res.status === "rented" && (
+                        <button
+                          onClick={() =>
+                            handleStatusChange(
+                              res._id,
+                              "returned",
+                              returnNotes[res._id]
+                            )
+                          }
+                          className="px-4 py-1.5 bg-gray-800 text-white rounded text-sm font-bold shadow-sm"
+                        >
+                          반납 확인
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))
@@ -676,6 +737,7 @@ export default function AdminDashboard() {
       {/* TAB 2: 회원 관리 */}
       {activeTab === "users" && (
         <div className="space-y-6">
+          {/* 회원 관리 탭 내용 (기존 유지) */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="flex gap-2">
               <button
@@ -793,16 +855,6 @@ export default function AdminDashboard() {
                     </td>
                   </tr>
                 ))}
-                {filteredUsers.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={5}
-                      className="px-6 py-12 text-center text-gray-400"
-                    >
-                      회원이 없습니다.
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
@@ -859,11 +911,7 @@ export default function AdminDashboard() {
                           isFixed: !log.isFixed,
                         })
                       }
-                      className={`px-4 py-2 rounded-lg text-sm font-bold ${
-                        log.isFixed
-                          ? "bg-white border text-gray-500"
-                          : "bg-black text-white"
-                      }`}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold ${log.isFixed ? "bg-white border text-gray-500" : "bg-black text-white"}`}
                     >
                       {log.isFixed ? "다시 수리필요" : "수리 완료 처리"}
                     </button>

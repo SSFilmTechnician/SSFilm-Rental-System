@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-// import { supabase } from "../../lib/supabase"; // 삭제 또는 주석
+// import { supabase } from "../../lib/supabase";
 import { User, LogOut, Phone, Mail, GraduationCap } from "lucide-react";
+import { useCartStore } from "../../stores/useCartStore"; // ✅ Import 함
 
 interface UserProfile {
   name: string;
@@ -43,9 +44,20 @@ export default function StudentDashboard() {
   }, [navigate]);
 
   const handleLogout = async () => {
+    // ✅ [수정됨] 여기서 useCartStore를 실제로 사용해야 에러가 사라집니다.
+
+    // 1. 상태 관리(Zustand) 메모리 비우기
+    useCartStore.getState().clearCart();
+
+    // 2. 로컬 스토리지 비우기 (잔여 데이터 삭제)
+    localStorage.removeItem("cart-storage");
+    localStorage.removeItem("cart");
+
+    // 3. 로그아웃 처리
     // await supabase.auth.signOut(); // 주석 처리
+
     navigate("/");
-    alert("로그아웃 되었습니다. (임시)");
+    alert("로그아웃 되었습니다. (장바구니 초기화 완료)");
   };
 
   if (loading)
