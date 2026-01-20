@@ -39,6 +39,7 @@ export default defineSchema({
   // 4. 개별 자산(Asset) 테이블
   assets: defineTable({
     equipmentId: v.id("equipment"),
+    equipmentName: v.optional(v.string()),  // 장비명 (조회 편의용)
     serialNumber: v.optional(v.string()),  // 시리얼 번호 (A, B, 1, 2 등)
     managementCode: v.optional(v.string()),
     status: v.string(),  // "available" | "rented" | "maintenance"
@@ -88,8 +89,11 @@ export default defineSchema({
   // 7. 장비 이력 테이블 (대여/반납 기록)
   assetHistory: defineTable({
     assetId: v.id("assets"),
+    equipmentName: v.optional(v.string()),  // 장비명 (조회 편의용)
+    serialNumber: v.optional(v.string()),   // 시리얼 번호 (조회 편의용)
     reservationId: v.id("reservations"),
     userId: v.id("users"),
+    userName: v.optional(v.string()),       // 사용자명 (조회 편의용)
     action: v.string(),  // "rented" | "returned"
     returnCondition: v.optional(v.string()),  // "normal" | "damaged" | "missing_parts"
     returnNotes: v.optional(v.string()),

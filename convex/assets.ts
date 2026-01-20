@@ -90,8 +90,13 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const now = Date.now();
 
+    // 장비명 가져오기
+    const equipment = await ctx.db.get(args.equipmentId);
+    const equipmentName = equipment?.name || "Unknown";
+
     return await ctx.db.insert("assets", {
       equipmentId: args.equipmentId,
+      equipmentName,
       serialNumber: args.serialNumber,
       managementCode: args.managementCode,
       status: args.status || "available",
@@ -112,9 +117,14 @@ export const createBatch = mutation({
     const now = Date.now();
     const ids = [];
 
+    // 장비명 가져오기
+    const equipment = await ctx.db.get(args.equipmentId);
+    const equipmentName = equipment?.name || "Unknown";
+
     for (const serialNumber of args.serialNumbers) {
       const id = await ctx.db.insert("assets", {
         equipmentId: args.equipmentId,
+        equipmentName,
         serialNumber: serialNumber.trim(),
         status: "available",
         createdAt: now,
@@ -181,19 +191,28 @@ export const assignToReservation = mutation({
 
     const now = Date.now();
 
+    // 사용자 정보 가져오기
+    const user = await ctx.db.get(reservation.userId);
+    const userName = user?.name || "Unknown";
+
     // 1. 개별 장비 상태를 'rented'로 변경
     for (const assignment of args.assignments) {
       for (const assetId of assignment.assetIds) {
+        const asset = await ctx.db.get(assetId);
+
         await ctx.db.patch(assetId, {
           status: "rented",
           updatedAt: now,
         });
 
-        // 이력 기록
+        // 이력 기록 (조회 편의용 필드 포함)
         await ctx.db.insert("assetHistory", {
           assetId,
+          equipmentName: asset?.equipmentName,
+          serialNumber: asset?.serialNumber,
           reservationId: args.reservationId,
           userId: reservation.userId,
+          userName,
           action: "rented",
           timestamp: now,
         });
@@ -241,7 +260,13 @@ export const returnAssets = mutation({
 
     const now = Date.now();
 
+    // 사용자 정보 가져오기
+    const user = await ctx.db.get(reservation.userId);
+    const userName = user?.name || "Unknown";
+
     for (const ret of args.returns) {
+      const asset = await ctx.db.get(ret.assetId);
+
       // 1. 개별 장비 상태 업데이트
       const newStatus = ret.condition === "normal" ? "available" : "maintenance";
 
@@ -251,11 +276,14 @@ export const returnAssets = mutation({
         updatedAt: now,
       });
 
-      // 2. 이력 기록
+      // 2. 이력 기록 (조회 편의용 필드 포함)
       await ctx.db.insert("assetHistory", {
         assetId: ret.assetId,
+        equipmentName: asset?.equipmentName,
+        serialNumber: asset?.serialNumber,
         reservationId: args.reservationId,
         userId: reservation.userId,
+        userName,
         action: "returned",
         returnCondition: ret.condition,
         returnNotes: ret.notes,
@@ -291,19 +319,28 @@ export const updateAssignment = mutation({
       }
     }
 
+    // 사용자 정보 가져오기
+    const user = await ctx.db.get(reservation.userId);
+    const userName = user?.name || "Unknown";
+
     // 2. 새 장비 상태 변경 (rented로)
     for (const assetId of args.newAssetIds) {
       if (!args.oldAssetIds.includes(assetId)) {
+        const asset = await ctx.db.get(assetId);
+
         await ctx.db.patch(assetId, {
           status: "rented",
           updatedAt: now,
         });
 
-        // 이력 기록
+        // 이력 기록 (조회 편의용 필드 포함)
         await ctx.db.insert("assetHistory", {
           assetId,
+          equipmentName: asset?.equipmentName,
+          serialNumber: asset?.serialNumber,
           reservationId: args.reservationId,
           userId: reservation.userId,
+          userName,
           action: "rented",
           timestamp: now,
         });
