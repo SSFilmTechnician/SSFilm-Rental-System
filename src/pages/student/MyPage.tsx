@@ -40,12 +40,13 @@ export default function MyPage() {
     if (!text) return "";
 
     // 줄바꿈으로 분리
-    const lines = text.split("\n").map((l) => l.trim()).filter((l) => l);
+    const lines = text
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l);
 
     // [문의 사항], [문의] 등으로 시작하는 줄 찾기
-    const inquiryIndex = lines.findIndex((line) =>
-      line.startsWith("[문의")
-    );
+    const inquiryIndex = lines.findIndex((line) => line.startsWith("[문의"));
 
     // [문의] 줄이 있으면 그 바로 앞 줄이 프로젝트명
     if (inquiryIndex > 0) {
@@ -154,10 +155,8 @@ export default function MyPage() {
             개인정보 도용 방지를 위해 정보 수정이 제한되어 있습니다.
             <br />
             개명, 연락처 변경 등이 필요한 경우{" "}
-            <span className="underline font-bold cursor-pointer">
-              학과 사무실
-            </span>
-            에 문의해주세요.
+            <span className="underline font-bold cursor-pointer">기술팀</span>에
+            문의해주세요.
           </p>
         </div>
 
