@@ -10,9 +10,5 @@
     "moduleResolution": "Bundler",
     "strict": true
   },
-  "include": ["src", "convex"],
-  "references": [
-    { "path": "./tsconfig.app.json" },
-    { "path": "./tsconfig.node.json" }
-  ]
+  "include": ["src", "convex"]
 }
