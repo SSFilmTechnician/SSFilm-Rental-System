@@ -19,11 +19,7 @@
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
 
-    // 💡 아래 부분을 수정/확인하세요
-    "noEmit": false,
-    "declaration": true,
-    "declarationMap": true,
-    "emitDeclarationOnly": true, // 실제 JS 파일은 안 만들고 선언 파일만 생성 (깔끔함)
+    "noEmit": true,
 
     "jsx": "react-jsx",
     "strict": true,
