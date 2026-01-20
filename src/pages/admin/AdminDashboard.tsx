@@ -617,7 +617,7 @@ export default function AdminDashboard() {
                             "_blank"
                           )
                         }
-                        className="flex gap-1 px-3 py-1.5 border bg-white rounded text-sm hover:bg-gray-50"
+                        className="flex gap-1 px-3 py-1.5 bg-gray-900 text-white rounded text-sm hover:bg-gray-700 transition-colors"
                       >
                         <Printer className="w-4 h-4" /> 반출 장비리스트
                       </button>

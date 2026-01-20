@@ -85,7 +85,6 @@ export default function ReservationPrint() {
     return (
       <div className="p-10 text-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto mb-4"></div>
-        로딩 중...
       </div>
     );
   }
@@ -114,7 +113,10 @@ export default function ReservationPrint() {
     if (!text) return "-";
 
     // 줄바꿈으로 분리
-    const lines = text.split("\n").map((l) => l.trim()).filter((l) => l);
+    const lines = text
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l);
 
     // [문의 사항], [문의] 등으로 시작하는 줄 찾기
     const inquiryIndex = lines.findIndex((line) => line.startsWith("[문의"));

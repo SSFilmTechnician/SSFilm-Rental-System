@@ -155,8 +155,10 @@ export default function MyPage() {
             개인정보 도용 방지를 위해 정보 수정이 제한되어 있습니다.
             <br />
             개명, 연락처 변경 등이 필요한 경우{" "}
-            <span className="underline font-bold cursor-pointer">기술팀</span>에
-            문의해주세요.
+            <span className="underline font-bold cursor-pointer">
+              학과 사무실
+            </span>
+            에 문의해주세요.
           </p>
         </div>
 
