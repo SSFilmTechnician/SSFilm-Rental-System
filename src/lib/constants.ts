@@ -12,7 +12,7 @@ export const CATEGORY_MAP: Record<string, string[]> = {
   MONITOR: ["MONITOR", "VIDEO WIRELESS", "ACC"],
   ACC: ["FOCUS·MATTEBOX", "BATTERY", "FILTER", "ETC"],
   LIGHTING: ["LIGHT", "STAND", "ACC"],
-  AUDIO: ["MIC", "RECORDER", "ACC"],
+  AUDIO: ["RECORDER SET", "MIC", "ACC"],
 };
 
 // 2. 상단 네비게이션 표시 순서 (요청하신 순서 완벽 적용)

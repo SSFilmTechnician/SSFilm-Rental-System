@@ -35,30 +35,19 @@ export default function MyPage() {
       .padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")})`;
   };
 
-  // purposeDetail에서 프로젝트명 추출
   const getProjectTitle = (text: string) => {
     if (!text) return "";
-
-    // 줄바꿈으로 분리
     const lines = text
       .split("\n")
       .map((l) => l.trim())
       .filter((l) => l);
-
-    // [문의 사항], [문의] 등으로 시작하는 줄 찾기
     const inquiryIndex = lines.findIndex((line) => line.startsWith("[문의"));
-
-    // [문의] 줄이 있으면 그 바로 앞 줄이 프로젝트명
     if (inquiryIndex > 0) {
       return lines[inquiryIndex - 1];
     }
-
-    // [문의] 줄이 없으면 마지막에서 두 번째 줄 (마지막은 장소)
     if (lines.length >= 2) {
       return lines[lines.length - 2];
     }
-
-    // 줄이 1개면 그대로 반환
     return lines[0] || "";
   };
 
@@ -73,33 +62,33 @@ export default function MyPage() {
     switch (s) {
       case "pending":
         return (
-          <span className="flex items-center text-yellow-700 bg-yellow-100 px-2 py-1 rounded text-xs font-bold">
+          <span className="inline-flex items-center text-yellow-700 bg-yellow-100 px-2 py-1 rounded text-xs font-bold whitespace-nowrap">
             <Clock className="w-3 h-3 mr-1" />
             승인대기
           </span>
         );
       case "approved":
         return (
-          <span className="flex items-center text-blue-700 bg-blue-100 px-2 py-1 rounded text-xs font-bold">
+          <span className="inline-flex items-center text-blue-700 bg-blue-100 px-2 py-1 rounded text-xs font-bold whitespace-nowrap">
             <CheckCircle2 className="w-3 h-3 mr-1" />
             예약승인
           </span>
         );
       case "rented":
         return (
-          <span className="flex items-center text-green-700 bg-green-100 px-2 py-1 rounded text-xs font-bold">
+          <span className="inline-flex items-center text-green-700 bg-green-100 px-2 py-1 rounded text-xs font-bold whitespace-nowrap">
             대여중
           </span>
         );
       case "returned":
         return (
-          <span className="flex items-center text-gray-700 bg-gray-100 px-2 py-1 rounded text-xs font-bold">
+          <span className="inline-flex items-center text-gray-700 bg-gray-100 px-2 py-1 rounded text-xs font-bold whitespace-nowrap">
             반납완료
           </span>
         );
       case "rejected":
         return (
-          <span className="flex items-center text-red-700 bg-red-100 px-2 py-1 rounded text-xs font-bold">
+          <span className="inline-flex items-center text-red-700 bg-red-100 px-2 py-1 rounded text-xs font-bold whitespace-nowrap">
             <XCircle className="w-3 h-3 mr-1" />
             거절됨
           </span>
@@ -109,7 +98,6 @@ export default function MyPage() {
     }
   };
 
-  // 1. 로딩 중 처리
   if (userProfile === undefined || reservations === undefined) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
@@ -118,7 +106,6 @@ export default function MyPage() {
     );
   }
 
-  // 2. 데이터 없음 처리
   if (userProfile === null) {
     return (
       <div className="text-center py-20 text-gray-400">
@@ -128,33 +115,31 @@ export default function MyPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-5 py-10 pb-20">
-      <h1 className="text-2xl font-bold mb-6">마이페이지</h1>
+    <div className="max-w-3xl mx-auto px-4 md:px-5 py-6 md:py-10 pb-24">
+      <h1 className="text-xl md:text-2xl font-bold mb-5 md:mb-6">마이페이지</h1>
 
-      {/* 내 정보 영역 (수정 불가) */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-10">
-        {/* 헤더 */}
-        <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex items-center gap-4">
-          <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center border border-gray-200 text-gray-400">
-            <User className="w-6 h-6" />
+      {/* 내 정보 영역 */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-8 md:mb-10">
+        <div className="bg-gray-50 px-5 py-4 border-b border-gray-200 flex items-center gap-4">
+          <div className="w-10 h-10 md:w-12 md:h-12 bg-white rounded-full flex items-center justify-center border border-gray-200 text-gray-400 flex-shrink-0">
+            <User className="w-5 h-5 md:w-6 md:h-6" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-gray-900">내 정보</h2>
+            <h2 className="text-base md:text-lg font-bold text-gray-900">
+              내 정보
+            </h2>
             <p className="text-xs text-gray-500">
               {userProfile.role === "admin"
-                ? "관리자 계정입니다."
-                : "등록된 학생 정보를 확인합니다."}
+                ? "관리자 계정"
+                : "등록된 학생 정보 확인"}
             </p>
           </div>
         </div>
 
-        {/* 수정 불가 안내 배너 */}
-        <div className="bg-blue-50 px-6 py-3 flex items-start gap-3 border-b border-blue-100">
+        <div className="bg-blue-50 px-5 py-3 flex items-start gap-3 border-b border-blue-100">
           <ShieldAlert className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
           <p className="text-xs text-blue-700 font-medium leading-relaxed">
-            개인정보 도용 방지를 위해 정보 수정이 제한되어 있습니다.
-            <br />
-            개명, 연락처 변경 등이 필요한 경우{" "}
+            정보 수정이 제한되어 있습니다. 변경이 필요한 경우{" "}
             <span className="underline font-bold cursor-pointer">
               학과 사무실
             </span>
@@ -162,50 +147,46 @@ export default function MyPage() {
           </p>
         </div>
 
-        {/* 정보 표시 (읽기 전용 폼) */}
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           <div>
             <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wide">
               이름
             </label>
-            <div className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700 font-medium">
+            <div className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700 font-medium text-sm md:text-base">
               {userProfile.name || "-"}
             </div>
           </div>
-
           <div>
             <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wide">
               학번
             </label>
-            <div className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700 font-medium">
+            <div className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700 font-medium text-sm md:text-base">
               {userProfile.studentId || "-"}
             </div>
           </div>
-
           <div>
             <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wide">
               연락처
             </label>
-            <div className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700 font-medium">
+            <div className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700 font-medium text-sm md:text-base">
               {userProfile.phone || "-"}
             </div>
           </div>
-
           <div>
             <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wide">
               이메일
             </label>
-            <div className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-500 font-medium truncate">
+            <div className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-500 font-medium truncate text-sm md:text-base">
               {userProfile.email || "-"}
             </div>
           </div>
         </div>
       </div>
 
-      {/* 예약 신청 내역 (기존 유지) */}
-      <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+      {/* 예약 신청 내역 */}
+      <h3 className="text-lg md:text-xl font-bold mb-4 flex items-center gap-2">
         예약 신청 내역
-        <span className="text-sm font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+        <span className="text-xs md:text-sm font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
           {reservations.length}건
         </span>
       </h3>
@@ -219,9 +200,7 @@ export default function MyPage() {
         <div className="space-y-3">
           {reservations.map((res) => {
             const isExpanded = expandedId === res._id;
-            // 프로젝트명 추출 (purposeDetail에서 파싱)
             const projectTitle = getProjectTitle(res.purposeDetail);
-            // 프로젝트명이 있으면 사용, 없으면 purpose 사용
             const mainTitle = projectTitle || res.purpose;
             const firstItemName = res.items[0]?.name || "장비";
             const extraCount = res.items.length - 1;
@@ -235,48 +214,66 @@ export default function MyPage() {
                 key={res._id}
                 className={`bg-white border rounded-xl overflow-hidden transition-all duration-200 ${
                   isExpanded
-                    ? "shadow-md border-black"
+                    ? "shadow-md border-black ring-1 ring-black/5"
                     : "hover:border-gray-400"
                 }`}
               >
                 <div
                   onClick={() => toggleExpand(res._id)}
-                  className="p-5 cursor-pointer flex justify-between items-center bg-white hover:bg-gray-50 transition-colors"
+                  className="p-4 md:p-5 cursor-pointer flex justify-between items-start gap-3 bg-white hover:bg-gray-50 transition-colors active:scale-[0.99] origin-center touch-manipulation"
                 >
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-3 mb-1">
+                  <div className="flex flex-col gap-2 flex-1 min-w-0">
+                    {/* 상단: 뱃지 + 예약번호 + 날짜 (한 줄로 깔끔하게) */}
+                    <div className="flex items-center flex-wrap gap-2 text-xs">
                       {getStatusBadge(res.status)}
-                      <span className="text-xs text-gray-400 font-mono">
+                      <span className="text-gray-300">|</span>
+                      <span className="text-gray-400 font-mono tracking-tight">
                         #{res.reservationNumber?.slice(-4)}
                       </span>
-                      <span className="text-xs text-gray-400">|</span>
-                      <span className="text-xs text-gray-500">
-                        {new Date(res._creationTime).toLocaleDateString()} 신청
+                      <span className="text-gray-400">
+                        {new Date(res._creationTime).toLocaleDateString()}
                       </span>
                     </div>
-                    <h4 className="font-bold text-lg text-gray-900">
-                      {mainTitle}
-                    </h4>
-                    <div className="text-sm text-gray-500 mt-0.5 font-medium">
-                      {subTitle}
+
+                    {/* 제목 영역: 너비 전체 사용, 줄바꿈 개선 */}
+                    <div>
+                      <h4 className="font-bold text-base md:text-lg text-gray-900 leading-snug break-keep">
+                        {mainTitle}
+                      </h4>
+                      <div className="text-sm text-gray-500 font-medium truncate mt-0.5">
+                        {subTitle}
+                      </div>
+                    </div>
+
+                    {/* 모바일 날짜: 제목 아래에 배치하여 간섭 제거 */}
+                    <div className="flex sm:hidden items-center gap-1.5 text-xs text-gray-500 bg-gray-50 px-2 py-1.5 rounded w-fit mt-1">
+                      <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                      <span className="font-medium">
+                        {formatDate(res.startDate)} ~ {formatDate(res.endDate)}
+                      </span>
                     </div>
                   </div>
-                  <div className="text-gray-400 flex flex-col items-end gap-1">
-                    <span className="text-xs text-gray-400 flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
+
+                  {/* 우측: PC 날짜 + 화살표 */}
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0 pl-2">
+                    {/* PC에서만 보이는 날짜 */}
+                    <span className="hidden sm:flex items-center gap-1.5 text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">
+                      <Calendar className="w-3 h-3 text-gray-400" />
                       {formatDate(res.startDate)} ~ {formatDate(res.endDate)}
                     </span>
-                    {isExpanded ? (
-                      <ChevronUp className="w-5 h-5" />
-                    ) : (
-                      <ChevronDown className="w-5 h-5" />
-                    )}
+                    <div className="text-gray-400 mt-1 p-1">
+                      {isExpanded ? (
+                        <ChevronUp className="w-5 h-5" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5" />
+                      )}
+                    </div>
                   </div>
                 </div>
 
                 {isExpanded && (
-                  <div className="border-t border-gray-100 bg-gray-50 p-5 space-y-6 animate-fadeIn">
-                    <div className="bg-white p-4 rounded-lg border border-gray-200">
+                  <div className="border-t border-gray-100 bg-gray-50 p-4 md:p-5 space-y-5 animate-fadeIn">
+                    <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                       <div className="text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1">
                         <Users className="w-3 h-3" /> 신청 상세 내용
                       </div>
@@ -289,16 +286,16 @@ export default function MyPage() {
                       <div className="text-xs font-bold text-gray-500 uppercase mb-2 ml-1">
                         상세 장비 목록
                       </div>
-                      <ul className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-100">
+                      <ul className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-100 shadow-sm">
                         {res.items.map((item, idx) => (
                           <li
                             key={idx}
-                            className="p-3 flex justify-between items-center text-sm hover:bg-gray-50"
+                            className="p-3 flex justify-between items-center text-sm"
                           >
-                            <span className="font-medium text-gray-700">
+                            <span className="font-medium text-gray-700 line-clamp-1 mr-2">
                               {item.name}
                             </span>
-                            <span className="font-bold text-gray-900 bg-gray-100 px-2 py-0.5 rounded text-xs">
+                            <span className="font-bold text-gray-900 bg-gray-100 px-2.5 py-1 rounded text-xs whitespace-nowrap">
                               {item.quantity}개
                             </span>
                           </li>
@@ -312,10 +309,10 @@ export default function MyPage() {
                           onClick={() =>
                             window.open(
                               `/print/reservation/${res._id}`,
-                              "_blank"
+                              "_blank",
                             )
                           }
-                          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-50 hover:text-black hover:border-black transition-all shadow-sm"
+                          className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-white border border-gray-300 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-50 hover:text-black hover:border-black transition-all shadow-sm active:scale-[0.98]"
                         >
                           <Printer className="w-4 h-4" />
                           예약 장비리스트 출력

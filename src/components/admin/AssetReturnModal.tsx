@@ -29,7 +29,10 @@ interface AssetData {
   note?: string;
 }
 
-type ReturnCondition = "normal" | "damaged" | "missing_parts";
+// 스키마와 일치하는 상태 값들 (normal, damaged, lost)
+// missing_parts는 스키마엔 없으므로 damaged로 통합하거나 별도 처리 가능하지만,
+// 여기서는 UI 편의상 damaged/lost로 매핑하여 처리하겠습니다.
+type ReturnCondition = "normal" | "damaged" | "lost";
 
 interface ReturnInfo {
   assetId: Id<"assets">;
@@ -44,7 +47,8 @@ export default function AssetReturnModal({
   items,
   onReturnComplete,
 }: Props) {
-  const returnAssets = useMutation(api.assets.returnAssets);
+  // [변경] 기존 assets.returnAssets 대신 admin.processReturn 사용
+  const processReturn = useMutation(api.admin.processReturn);
   const allAssets = useQuery(api.assets.getAll);
 
   // 각 배정된 장비의 반납 상태 관리
@@ -75,15 +79,13 @@ export default function AssetReturnModal({
 
   if (!isOpen || !allAssets) return null;
 
-  // 자산 ID로 자산 정보 찾기
   const getAssetInfo = (assetId: Id<"assets">): AssetData | undefined => {
     return allAssets.find((a) => a._id === assetId);
   };
 
-  // 상태 변경 핸들러
   const handleConditionChange = (
     assetId: Id<"assets">,
-    condition: ReturnCondition
+    condition: ReturnCondition,
   ) => {
     setReturnInfos((prev) => ({
       ...prev,
@@ -94,7 +96,6 @@ export default function AssetReturnModal({
     }));
   };
 
-  // 메모 변경 핸들러
   const handleNotesChange = (assetId: Id<"assets">, notes: string) => {
     setReturnInfos((prev) => ({
       ...prev,
@@ -105,22 +106,28 @@ export default function AssetReturnModal({
     }));
   };
 
-  // 반납 처리
   const handleReturn = async () => {
-    const returns = Object.values(returnInfos).map((info) => ({
+    const returnItems = Object.values(returnInfos).map((info) => ({
       assetId: info.assetId,
       condition: info.condition,
-      notes: info.notes || undefined,
+      note: info.notes || undefined,
     }));
 
-    // 파손이나 부품 누락이 있는지 확인
-    const hasIssues = returns.some((r) => r.condition !== "normal");
+    const hasIssues = returnItems.some((r) => r.condition !== "normal");
 
+    // 파손/분실 선택 시 메모 입력 여부 체크
     if (hasIssues) {
-      const issueCount = returns.filter((r) => r.condition !== "normal").length;
+      const missingNotes = returnItems.some(
+        (r) => r.condition !== "normal" && !r.note,
+      );
+      if (missingNotes) {
+        alert("파손 또는 분실된 장비의 상세 내용을 입력해주세요.");
+        return;
+      }
+
       if (
         !confirm(
-          `${issueCount}개의 장비에 문제가 있습니다. 반납 처리하시겠습니까?\n\n문제가 있는 장비는 자동으로 '수리중' 상태가 됩니다.`
+          `문제가 있는 장비가 포함되어 있습니다.\n반납 처리 시 자동으로 '수리 현황' 탭에 등록됩니다.\n계속하시겠습니까?`,
         )
       ) {
         return;
@@ -128,47 +135,23 @@ export default function AssetReturnModal({
     }
 
     try {
-      if (returns.length > 0) {
-        await returnAssets({
-          reservationId,
-          returns,
-        });
-      }
+      // [변경] processReturn 호출
+      await processReturn({
+        reservationId,
+        returnItems,
+      });
 
+      alert("반납 처리가 완료되었습니다.");
       onReturnComplete();
       onClose();
-    } catch (e) {
-      alert("반납 처리 실패: " + e);
+    } catch (e: any) {
+      alert("반납 처리 실패: " + (e.message || e));
     }
   };
 
-  // 배정된 장비가 있는지 확인
   const hasAssignedAssets = items.some(
-    (item) => item.assignedAssets && item.assignedAssets.length > 0
+    (item) => item.assignedAssets && item.assignedAssets.length > 0,
   );
-
-  const getConditionBadge = (condition: ReturnCondition) => {
-    switch (condition) {
-      case "normal":
-        return (
-          <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-bold">
-            정상
-          </span>
-        );
-      case "damaged":
-        return (
-          <span className="bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs font-bold">
-            파손
-          </span>
-        );
-      case "missing_parts":
-        return (
-          <span className="bg-orange-100 text-orange-800 px-2 py-0.5 rounded text-xs font-bold">
-            부품 누락
-          </span>
-        );
-    }
-  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -191,112 +174,119 @@ export default function AssetReturnModal({
         {/* 본문 */}
         <div className="p-4 overflow-y-auto flex-1 space-y-6">
           {!hasAssignedAssets ? (
-            <div className="text-center py-8 text-gray-500">
-              <AlertTriangle className="w-12 h-12 mx-auto mb-2 text-yellow-500" />
-              <p>배정된 개별 장비가 없습니다.</p>
-              <p className="text-sm mt-1">
-                장비 배정 없이 반납 처리를 진행합니다.
+            <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+              <AlertTriangle className="w-10 h-10 mx-auto mb-2 text-yellow-500" />
+              <p className="font-bold">배정된 개별 장비 정보가 없습니다.</p>
+              <p className="text-xs mt-1">
+                상세 기록 없이 일괄 반납 처리됩니다.
               </p>
             </div>
           ) : (
-            items.map((item) => {
-              if (!item.assignedAssets || item.assignedAssets.length === 0) {
-                return null;
-              }
+            <>
+              <div className="bg-blue-50 p-3 rounded border border-blue-100 text-sm text-blue-800 mb-4">
+                💡 <b>'파손'</b>이나 <b>'분실'</b>을 선택하면 자동으로 수리
+                현황에 등록되며, 장비는 대여 불가 상태가 됩니다.
+              </div>
 
-              return (
-                <div key={item.equipmentId} className="border rounded-lg p-4">
-                  <h4 className="font-bold mb-3">{item.name}</h4>
+              {items.map((item) => {
+                if (!item.assignedAssets || item.assignedAssets.length === 0) {
+                  return null;
+                }
 
-                  <div className="space-y-3">
-                    {item.assignedAssets.map((assetId) => {
-                      const asset = getAssetInfo(assetId);
-                      const info = returnInfos[assetId];
+                return (
+                  <div key={item.equipmentId} className="border rounded-lg p-4">
+                    <h4 className="font-bold mb-3 text-lg">{item.name}</h4>
 
-                      if (!info) return null;
+                    <div className="space-y-3">
+                      {item.assignedAssets.map((assetId) => {
+                        const asset = getAssetInfo(assetId);
+                        const info = returnInfos[assetId];
 
-                      return (
-                        <div
-                          key={assetId}
-                          className={`p-3 rounded-lg border ${
-                            info.condition === "normal"
-                              ? "bg-gray-50 border-gray-200"
-                              : info.condition === "damaged"
-                                ? "bg-red-50 border-red-200"
-                                : "bg-orange-50 border-orange-200"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-bold">
-                                {asset?.serialNumber || "번호없음"}
+                        if (!info) return null;
+
+                        const isProblem = info.condition !== "normal";
+
+                        return (
+                          <div
+                            key={assetId}
+                            className={`p-3 rounded-lg border transition-all ${
+                              isProblem
+                                ? "bg-red-50 border-red-200 shadow-sm"
+                                : "bg-gray-50 border-gray-200"
+                            }`}
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                              <span className="font-mono font-bold text-gray-700">
+                                S/N: {asset?.serialNumber || "번호없음"}
                               </span>
-                              {getConditionBadge(info.condition)}
+
+                              {/* 상태 선택 버튼 그룹 */}
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() =>
+                                    handleConditionChange(assetId, "normal")
+                                  }
+                                  className={`px-3 py-1.5 rounded text-xs font-bold border ${
+                                    info.condition === "normal"
+                                      ? "bg-green-600 text-white border-green-600"
+                                      : "bg-white text-gray-600 border-gray-300 hover:bg-gray-100"
+                                  }`}
+                                >
+                                  정상
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    handleConditionChange(assetId, "damaged")
+                                  }
+                                  className={`px-3 py-1.5 rounded text-xs font-bold border ${
+                                    info.condition === "damaged"
+                                      ? "bg-red-600 text-white border-red-600"
+                                      : "bg-white text-gray-600 border-gray-300 hover:bg-gray-100"
+                                  }`}
+                                >
+                                  파손
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    handleConditionChange(assetId, "lost")
+                                  }
+                                  className={`px-3 py-1.5 rounded text-xs font-bold border ${
+                                    info.condition === "lost"
+                                      ? "bg-orange-600 text-white border-orange-600"
+                                      : "bg-white text-gray-600 border-gray-300 hover:bg-gray-100"
+                                  }`}
+                                >
+                                  분실
+                                </button>
+                              </div>
                             </div>
-                          </div>
 
-                          {/* 상태 선택 버튼 */}
-                          <div className="flex gap-2 mb-2">
-                            <button
-                              onClick={() =>
-                                handleConditionChange(assetId, "normal")
-                              }
-                              className={`flex-1 py-2 rounded text-sm font-medium transition-all ${
-                                info.condition === "normal"
-                                  ? "bg-green-600 text-white"
-                                  : "bg-white border border-gray-300 text-gray-700 hover:border-green-400"
-                              }`}
-                            >
-                              <CheckCircle className="w-4 h-4 inline mr-1" />
-                              정상
-                            </button>
-                            <button
-                              onClick={() =>
-                                handleConditionChange(assetId, "damaged")
-                              }
-                              className={`flex-1 py-2 rounded text-sm font-medium transition-all ${
-                                info.condition === "damaged"
-                                  ? "bg-red-600 text-white"
-                                  : "bg-white border border-gray-300 text-gray-700 hover:border-red-400"
-                              }`}
-                            >
-                              <AlertTriangle className="w-4 h-4 inline mr-1" />
-                              파손
-                            </button>
-                            <button
-                              onClick={() =>
-                                handleConditionChange(assetId, "missing_parts")
-                              }
-                              className={`flex-1 py-2 rounded text-sm font-medium transition-all ${
-                                info.condition === "missing_parts"
-                                  ? "bg-orange-600 text-white"
-                                  : "bg-white border border-gray-300 text-gray-700 hover:border-orange-400"
-                              }`}
-                            >
-                              <Package className="w-4 h-4 inline mr-1" />
-                              부품 누락
-                            </button>
+                            {/* 문제 발생 시 메모 입력 필드 (필수) */}
+                            {isProblem && (
+                              <div className="mt-2 animate-fadeIn">
+                                <label className="text-xs font-bold text-red-600 mb-1 block">
+                                  상세 내용 입력 (필수)
+                                </label>
+                                <input
+                                  type="text"
+                                  placeholder="예: 렌즈 스크래치, 배터리 분실 등"
+                                  className="w-full border border-red-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                                  value={info.notes}
+                                  onChange={(e) =>
+                                    handleNotesChange(assetId, e.target.value)
+                                  }
+                                  autoFocus
+                                />
+                              </div>
+                            )}
                           </div>
-
-                          {/* 메모 입력 (문제가 있을 경우) */}
-                          {info.condition !== "normal" && (
-                            <input
-                              type="text"
-                              placeholder="상세 내용을 입력하세요..."
-                              className="w-full border rounded px-3 py-2 text-sm"
-                              value={info.notes}
-                              onChange={(e) =>
-                                handleNotesChange(assetId, e.target.value)
-                              }
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })
+                );
+              })}
+            </>
           )}
         </div>
 
@@ -310,9 +300,9 @@ export default function AssetReturnModal({
           </button>
           <button
             onClick={handleReturn}
-            className="px-4 py-2 bg-gray-800 text-white rounded text-sm font-bold hover:bg-gray-900"
+            className="px-6 py-2 bg-gray-900 text-white rounded text-sm font-bold hover:bg-black transition-colors"
           >
-            반납 완료
+            반납 완료 처리
           </button>
         </div>
       </div>

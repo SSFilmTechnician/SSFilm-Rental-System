@@ -12,8 +12,6 @@ export default defineSchema({
     phone: v.optional(v.string()),
     department: v.optional(v.string()),
     isApproved: v.optional(v.boolean()),
-
-    // ✅ [NEW] 장바구니 데이터 영구 저장 (JSON 문자열)
     cart: v.optional(v.string()),
   }).index("by_clerkId", ["clerkId"]),
 
@@ -24,7 +22,7 @@ export default defineSchema({
     order: v.optional(v.number()),
   }),
 
-  // 3. 장비 마스터 테이블
+  // 3. 장비 마스터 테이블 (문법 오류 수정 완료)
   equipment: defineTable({
     name: v.string(),
     categoryId: v.id("categories"),
@@ -34,26 +32,34 @@ export default defineSchema({
     totalQuantity: v.number(),
     isGroupPrint: v.optional(v.boolean()),
     sortOrder: v.optional(v.number()),
-  }).index("by_category", ["categoryId"]),
 
-  // 4. 개별 자산(Asset) 테이블
+    // ★ [핵심] 학생 페이지 노출 여부 (기존 데이터 호환을 위해 optional 사용)
+    isVisible: v.optional(v.boolean()),
+  })
+    .index("by_category", ["categoryId"])
+    // ★ [추가] 카테고리별로 "보이는 장비"만 빠르게 불러오기 위한 인덱스
+    .index("by_category_visibility", ["categoryId", "isVisible"]),
+
+  // 4. 개별 자산(Asset) 테이블 (단순화)
   assets: defineTable({
     equipmentId: v.id("equipment"),
-    equipmentName: v.optional(v.string()),  // 장비명 (조회 편의용)
-    serialNumber: v.optional(v.string()),  // 시리얼 번호 (A, B, 1, 2 등)
+    equipmentName: v.optional(v.string()),
+    categoryName: v.optional(v.string()),
+    serialNumber: v.optional(v.string()),
     managementCode: v.optional(v.string()),
-    status: v.string(),  // "available" | "rented" | "maintenance"
+    status: v.string(),
     note: v.optional(v.string()),
     createdAt: v.optional(v.number()),
     updatedAt: v.optional(v.number()),
-  }).index("by_equipmentId", ["equipmentId"])
+  })
+    .index("by_equipmentId", ["equipmentId"])
     .index("by_status", ["status"]),
 
-  // 5. 예약 테이블
+  // 5. 예약 테이블 (단품/세트 통합형)
   reservations: defineTable({
     userId: v.id("users"),
     reservationNumber: v.string(),
-    status: v.string(),
+    status: v.string(), // "pending" | "approved" | "rented" | "returned" | "canceled"
     purpose: v.string(),
     purposeDetail: v.string(),
     startDate: v.string(),
@@ -61,41 +67,74 @@ export default defineSchema({
     leaderName: v.string(),
     leaderPhone: v.string(),
     leaderStudentId: v.string(),
+
+    // 예약된 물품 목록
     items: v.array(
       v.object({
-        equipmentId: v.id("equipment"),
-        quantity: v.number(),
-        name: v.string(),
+        equipmentId: v.id("equipment"), // (수정) setId 없이 equipmentId로 통일
+        name: v.string(), // 장비명 (예: "MIXPRE-3 II 풀패키지")
+        quantity: v.number(), // 예약 수량
         checkedOut: v.boolean(),
         returned: v.boolean(),
-        assignedAssets: v.optional(v.array(v.id("assets"))),  // 배정된 개별 장비
-      })
+        // 관리자가 배정한 실제 자산 ID 목록
+        assignedAssets: v.optional(v.array(v.id("assets"))),
+      }),
     ),
   })
     .index("by_userId", ["userId"])
     .index("by_status", ["status"])
     .index("by_date", ["startDate"]),
 
-  // 6. 수리 내역 테이블
+  // 6. 수리 내역 테이블 (5단계 워크플로우)
   repairs: defineTable({
-    reservationId: v.id("reservations"),
+    reservationId: v.optional(v.id("reservations")),
     equipmentId: v.optional(v.id("equipment")),
     assetId: v.optional(v.id("assets")),
-    content: v.string(),
-    adminMemo: v.optional(v.string()),
-    isFixed: v.boolean(),
-  }).index("by_reservationId", ["reservationId"]),
 
-  // 7. 장비 이력 테이블 (대여/반납 기록)
+    equipmentName: v.optional(v.string()),
+    serialNumber: v.optional(v.string()),
+    studentName: v.optional(v.string()),
+    studentPhone: v.optional(v.string()),
+
+    stage: v.string(),
+
+    damageType: v.string(),
+    damageDescription: v.string(),
+    damagePhotos: v.optional(v.array(v.string())),
+    damageConfirmedAt: v.number(),
+
+    chargeType: v.optional(v.string()),
+    chargeDecidedAt: v.optional(v.number()),
+
+    estimateMemo: v.optional(v.string()),
+    estimateRequestedAt: v.optional(v.number()),
+
+    finalAmount: v.optional(v.number()),
+    paymentConfirmedAt: v.optional(v.number()),
+
+    repairResult: v.optional(v.string()),
+    completedAt: v.optional(v.number()),
+
+    adminMemo: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+
+    isFixed: v.boolean(),
+  })
+    .index("by_reservationId", ["reservationId"])
+    .index("by_assetId", ["assetId"])
+    .index("by_stage", ["stage"]),
+
+  // 7. 장비 이력 테이블
   assetHistory: defineTable({
     assetId: v.id("assets"),
-    equipmentName: v.optional(v.string()),  // 장비명 (조회 편의용)
-    serialNumber: v.optional(v.string()),   // 시리얼 번호 (조회 편의용)
-    reservationId: v.id("reservations"),
-    userId: v.id("users"),
-    userName: v.optional(v.string()),       // 사용자명 (조회 편의용)
-    action: v.string(),  // "rented" | "returned"
-    returnCondition: v.optional(v.string()),  // "normal" | "damaged" | "missing_parts"
+    equipmentName: v.optional(v.string()),
+    serialNumber: v.optional(v.string()),
+    reservationId: v.optional(v.id("reservations")),
+    userId: v.optional(v.id("users")),
+    userName: v.optional(v.string()),
+    action: v.string(),
+    returnCondition: v.optional(v.string()),
     returnNotes: v.optional(v.string()),
     timestamp: v.number(),
   })
@@ -105,12 +144,12 @@ export default defineSchema({
   // 8. 알림 테이블
   notifications: defineTable({
     userId: v.id("users"),
-    type: v.string(), // "reservation_approved", "reservation_rejected", "reservation_rented", "reservation_returned"
+    type: v.string(),
     title: v.string(),
     message: v.string(),
     relatedId: v.optional(v.id("reservations")),
     read: v.boolean(),
-    readAt: v.optional(v.number()), // 읽은 시간 (timestamp)
+    readAt: v.optional(v.number()),
   })
     .index("by_userId", ["userId"])
     .index("by_userId_read", ["userId", "read"]),

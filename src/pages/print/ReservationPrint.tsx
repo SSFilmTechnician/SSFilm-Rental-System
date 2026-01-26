@@ -18,8 +18,8 @@ interface PrintItem {
   checkedOut: boolean;
   returned: boolean;
   equipment: EquipmentDetail | null;
-  assignedSerialNumbers?: string[];
-  serialNumber?: string;  // 개별 아이템용
+  assignedManagementCodes?: string[];
+  managementCode?: string;  // 개별 아이템용 (인쇄 시 No. 컬럼에 표시)
 }
 
 interface PrintReservation {
@@ -73,19 +73,19 @@ export default function ReservationPrint() {
     const items: PrintItem[] = [];
     sortedItems.forEach((item) => {
       if (item.equipment?.isGroupPrint) {
-        // 그룹 인쇄: 모든 시리얼 번호를 쉼표로 연결
+        // 그룹 인쇄: isGroupPrint가 true면 관리코드 표시 안함
         items.push({
           ...item,
-          serialNumber: item.assignedSerialNumbers?.join(", ") || "",
+          managementCode: "",  // 그룹 인쇄 장비는 번호 표시 안함
         });
       } else {
-        // 개별 인쇄: 각 시리얼 번호별로 행 생성
-        const serials = item.assignedSerialNumbers || [];
+        // 개별 인쇄: 각 관리코드별로 행 생성
+        const codes = item.assignedManagementCodes || [];
         for (let i = 0; i < item.quantity; i++) {
           items.push({
             ...item,
             quantity: 1,
-            serialNumber: serials[i] || "",  // 배정된 번호가 있으면 사용
+            managementCode: codes[i] || "",  // 배정된 관리코드가 있으면 사용
           });
         }
       }
@@ -285,7 +285,7 @@ export default function ReservationPrint() {
                   {isRental && (
                     <>
                       <td className="border border-gray-300 p-2 text-center font-mono font-bold">
-                        {item.serialNumber || ""}
+                        {item.managementCode || ""}
                       </td>
                       <td className="border border-gray-300 p-2 text-center">
                         <div className="w-4 h-4 border border-gray-400 mx-auto"></div>

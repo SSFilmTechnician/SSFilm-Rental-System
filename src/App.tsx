@@ -1,50 +1,54 @@
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
-// 페이지 컴포넌트
+// 1. 공용 페이지
 import SignInPage from "./pages/SignIn";
 import Layout from "./components/layout/Layout";
-import Home from "./pages/Home"; // ✅ 우리가 만든 메인 페이지 (경로 확인 필요!)
+import Home from "./pages/Home";
 import EquipmentDetail from "./pages/EquipmentDetail";
+import RulesPage from "./pages/RulesPage";
+
+// 2. 학생용 페이지
 import CartPage from "./pages/student/CartPage";
 import MyPage from "./pages/student/MyPage";
+
+// 3. 관리자용 페이지
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminCalendar from "./pages/admin/AdminCalendar";
+
+// 4. 인쇄/유틸리티 페이지
 import ReservationPrint from "./pages/print/ReservationPrint";
 
-// 보안 컴포넌트
+// 5. 인증 및 데이터 동기화 컴포넌트
 import StoreUser from "./components/auth/StoreUser";
 import AuthWrapper from "./components/auth/AuthWrapper";
 
 function App() {
   return (
     <BrowserRouter>
-      {/* 1. 로딩 화면 (Convex가 로그인 여부 확인하는 동안 표시) */}
+      {/* 🔹 로딩 화면: Convex 인증 상태 확인 중일 때 표시 */}
       <AuthLoading>
         <div className="flex flex-col h-screen items-center justify-center bg-gray-50">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-black mb-4"></div>
-          <div className="font-bold text-lg text-gray-600">
-          
-          </div>
+          <p className="font-bold text-lg text-gray-600">Loading...</p>
         </div>
       </AuthLoading>
 
-      {/* 2. 라우팅 설정 */}
-      {/* Authenticated/Unauthenticated를 최상위에서 빼고, 필요한 곳에만 감쌉니다. */}
-
-      {/* ✅ 로그인 시 사용자 정보 동기화 (화면엔 안 보임) */}
+      {/* 🔹 사용자 동기화: 로그인 상태일 때만 백그라운드 실행 (DB에 유저 정보 저장/갱신) */}
       <Authenticated>
         <StoreUser />
       </Authenticated>
 
+      {/* 🔹 라우팅 설정 */}
       <Routes>
-        {/* 모든 페이지는 헤더/푸터가 있는 Layout 안에 들어감 */}
+        {/* === 기본 레이아웃 (헤더/푸터 포함) === */}
         <Route path="/" element={<Layout />}>
-          {/* [전체 공개] 로그인 없이 볼 수 있는 페이지 */}
-          <Route index element={<Home />} />{" "}
-          {/* ✅ 기존 EquipmentList 대신 Home 연결 */}
+          {/* [전체 공개] */}
+          <Route index element={<Home />} />
           <Route path="equipment/:id" element={<EquipmentDetail />} />
-          {/* [로그인 전용] 로그인 안 하면 로그인 페이지로 튕김 */}
+          <Route path="rules" element={<RulesPage />} />
+
+          {/* [비로그인 전용] 로그인 상태면 홈으로 튕김 (Unauthenticated 처리) */}
           <Route
             path="login"
             element={
@@ -53,7 +57,8 @@ function App() {
               </Unauthenticated>
             }
           />
-          {/* [회원 전용] 로그인 + 승인된 사용자만 접근 가능 */}
+
+          {/* [회원 전용] 로그인 + 승인 여부 체크 (AuthWrapper) */}
           <Route
             path="cart"
             element={
@@ -74,7 +79,8 @@ function App() {
               </Authenticated>
             }
           />
-          {/* [관리자 전용] */}
+
+          {/* [관리자 전용] AuthWrapper 내부에서 admin 권한 체크 */}
           <Route
             path="admin"
             element={
@@ -87,7 +93,9 @@ function App() {
           />
         </Route>
 
-        {/* [관리자 전용] 캘린더 - Layout 없이 풀스크린 */}
+        {/* === 풀스크린 레이아웃 (헤더/푸터 없음) === */}
+
+        {/* 관리자 캘린더 */}
         <Route
           path="admin/calendar"
           element={
@@ -99,7 +107,7 @@ function App() {
           }
         />
 
-        {/* [인쇄 페이지] 예약 장비리스트 & 반출리스트 - Layout 없이 풀스크린 */}
+        {/* 예약/반출증 인쇄 페이지 */}
         <Route
           path="print/reservation/:id"
           element={
@@ -111,7 +119,7 @@ function App() {
           }
         />
 
-        {/* 그 외 잘못된 접근은 홈으로 */}
+        {/* 잘못된 경로는 홈으로 리다이렉트 */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useSearchParams,
+  useLocation,
+} from "react-router-dom";
 import {
   ShoppingCart,
   User,
@@ -18,10 +23,11 @@ import { useClerk } from "@clerk/clerk-react";
 import { api } from "../../../convex/_generated/api";
 
 const LOGO_URL =
-  "https://oxxtmvcfhfmpobjcjugw.supabase.co/storage/v1/object/public/banners/SSFilm_Logo_Black.png";
+  "https://res.cloudinary.com/dd8pp8ngj/image/upload/v1769400548/SSFilm_Logo_Black_lzx6nw.png";
 
 export default function Header() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const currentCategory = searchParams.get("category")?.toUpperCase();
 
@@ -39,7 +45,6 @@ export default function Header() {
 
   // 장바구니 상태
   const storeItems = useCartStore((state) => state.items);
-  // 로그인 상태일 때만 아이템 계산 (로그아웃이면 빈 배열 처리하여 에러 방지)
   const displayItems = isAuthenticated ? storeItems : [];
   const itemCount = displayItems.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -54,7 +59,7 @@ export default function Header() {
   const markAllAsRead = useMutation(api.notifications.markAllAsRead);
   const deleteNotification = useMutation(api.notifications.deleteNotification);
   const cleanupOldNotifications = useMutation(
-    api.notifications.cleanupOldNotifications
+    api.notifications.cleanupOldNotifications,
   );
 
   // ---------------------------------------------------------------
@@ -137,6 +142,7 @@ export default function Header() {
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-[100]">
+      {/* 1단: 로고 및 아이콘 */}
       <div className="border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
@@ -156,7 +162,7 @@ export default function Header() {
             </Link>
 
             <div className="flex items-center space-x-2 md:space-x-4">
-              {/* ✅ [수정됨] 로그인 했을 때만(isAuthenticated) 장바구니 버튼이 보임 */}
+              {/* 장바구니 버튼 (항상 보임) */}
               {isAuthenticated && (
                 <button
                   onClick={() => navigate("/cart")}
@@ -169,8 +175,9 @@ export default function Header() {
                 </button>
               )}
 
+              {/* PC 전용 메뉴 (1024px 이상에서만 보임) */}
               {isAuthenticated ? (
-                <div className="hidden md:flex items-center space-x-2">
+                <div className="hidden lg:flex items-center space-x-2">
                   <div className="relative" ref={notiRef}>
                     <button
                       onClick={() => setShowNoti(!showNoti)}
@@ -238,7 +245,7 @@ export default function Header() {
                                         </p>
                                         <p className="text-[10px] text-gray-400 mt-1">
                                           {new Date(
-                                            noti._creationTime
+                                            noti._creationTime,
                                           ).toLocaleString("ko-KR", {
                                             month: "short",
                                             day: "numeric",
@@ -287,14 +294,15 @@ export default function Header() {
               ) : (
                 <button
                   onClick={() => navigate("/login")}
-                  className="hidden md:block text-sm text-gray-600 hover:text-gray-900 px-3 py-2 hover:bg-gray-50 rounded-lg transition-colors"
+                  className="hidden lg:block text-sm text-gray-600 hover:text-gray-900 px-3 py-2 hover:bg-gray-50 rounded-lg transition-colors"
                 >
                   로그인 / 회원가입
                 </button>
               )}
 
+              {/* 모바일 햄버거 메뉴 버튼 (1024px 미만에서만 보임) */}
               <button
-                className="md:hidden p-2 text-gray-600"
+                className="lg:hidden p-2 text-gray-600"
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
               >
                 {isMenuOpen ? (
@@ -308,91 +316,113 @@ export default function Header() {
         </div>
       </div>
 
-      <div className="hidden md:block bg-white relative shadow-sm">
+      {/* 2단: 네비게이션 바 (1024px 이상에서만 보임) */}
+      <div className="hidden lg:block bg-white relative shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex justify-center space-x-1 h-12 items-center">
-            {CATEGORY_ORDER.map((catKey) => {
-              const isActive = currentCategory === catKey;
-              const subCategories = CATEGORY_MAP[catKey] || [];
+          <div className="relative flex justify-center items-center h-12">
+            {/* NOTICE: 왼쪽 고정 */}
+            <div className="absolute left-0 flex items-center h-full">
+              <Link
+                to="/rules"
+                className={`px-4 py-2 text-sm font-bold whitespace-nowrap rounded-md transition-colors flex items-center gap-1 uppercase tracking-wide ${
+                  location.pathname === "/rules"
+                    ? "text-blue-600 bg-blue-50"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                }`}
+              >
+                NOTICE
+              </Link>
+            </div>
 
-              return (
-                <div
-                  key={catKey}
-                  className="relative h-full flex items-center"
-                  onMouseEnter={() => setHoveredCategory(catKey)}
-                  onMouseLeave={() => setHoveredCategory(null)}
-                >
-                  <Link
-                    to={`/?category=${catKey}`}
-                    className={`px-4 py-2 text-sm font-bold whitespace-nowrap rounded-md transition-colors flex items-center gap-1 uppercase tracking-wide ${
-                      isActive
-                        ? "text-blue-600 bg-blue-50"
-                        : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-                    }`}
+            {/* 카테고리: 중앙 정렬 */}
+            <nav className="flex space-x-1 h-full items-center">
+              {CATEGORY_ORDER.map((catKey) => {
+                const isActive = currentCategory === catKey;
+                const subCategories = CATEGORY_MAP[catKey] || [];
+
+                return (
+                  <div
+                    key={catKey}
+                    className="relative h-full flex items-center"
+                    onMouseEnter={() => setHoveredCategory(catKey)}
+                    onMouseLeave={() => setHoveredCategory(null)}
                   >
-                    {catKey}
-                    {subCategories.length > 0 && (
-                      <ChevronDown
-                        className={`w-3 h-3 transition-transform duration-200 ${
-                          hoveredCategory === catKey ? "rotate-180" : ""
-                        }`}
-                      />
-                    )}
-                  </Link>
-                  {hoveredCategory === catKey && subCategories.length > 0 && (
-                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 pt-2 z-50 w-48 animate-fadeIn">
-                      <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -ml-2 w-4 h-4 bg-white/95 rotate-45 border-t border-l border-gray-200 backdrop-blur-md"></div>
-                      <div className="bg-white/95 backdrop-blur-md border border-gray-200 shadow-xl p-1.5 flex flex-col gap-0.5 rounded-sm">
-                        {subCategories.map((sub) => (
-                          <Link
-                            key={sub}
-                            to={`/?category=${catKey}&subCategory=${sub}`}
-                            className="block px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-black hover:text-white transition-all text-center uppercase"
-                            onClick={() => setHoveredCategory(null)}
-                          >
-                            {sub}
-                          </Link>
-                        ))}
+                    <Link
+                      to={`/?category=${catKey}`}
+                      className={`px-4 py-2 text-sm font-bold whitespace-nowrap rounded-md transition-colors flex items-center gap-1 uppercase tracking-wide ${
+                        isActive
+                          ? "text-blue-600 bg-blue-50"
+                          : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                      }`}
+                    >
+                      {catKey}
+                      {subCategories.length > 0 && (
+                        <ChevronDown
+                          className={`w-3 h-3 transition-transform duration-200 ${
+                            hoveredCategory === catKey ? "rotate-180" : ""
+                          }`}
+                        />
+                      )}
+                    </Link>
+                    {hoveredCategory === catKey && subCategories.length > 0 && (
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 pt-2 z-50 w-48 animate-fadeIn">
+                        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -ml-2 w-4 h-4 bg-white/95 rotate-45 border-t border-l border-gray-200 backdrop-blur-md"></div>
+                        <div className="bg-white/95 backdrop-blur-md border border-gray-200 shadow-xl p-1.5 flex flex-col gap-0.5 rounded-sm">
+                          {subCategories.map((sub) => (
+                            <Link
+                              key={sub}
+                              to={`/?category=${catKey}&subCategory=${sub}`}
+                              className="block px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-black hover:text-white transition-all text-center uppercase"
+                              onClick={() => setHoveredCategory(null)}
+                            >
+                              {sub}
+                            </Link>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </nav>
+                    )}
+                  </div>
+                );
+              })}
+            </nav>
+          </div>
         </div>
       </div>
 
+      {/* 모바일 메뉴 (1024px 미만에서만 열림) */}
       {isMenuOpen && (
-        <div className="md:hidden bg-white border-t border-gray-100 absolute w-full left-0 z-50 shadow-lg max-h-[80vh] overflow-y-auto">
+        <div className="lg:hidden bg-white border-t border-gray-100 absolute w-full left-0 z-50 shadow-lg max-h-[80vh] overflow-y-auto">
           <div className="p-4 space-y-4">
+            <div>
+              <Link
+                to="/rules"
+                onClick={() => setIsMenuOpen(false)}
+                className={`block text-lg font-bold uppercase mb-4 ${
+                  location.pathname === "/rules"
+                    ? "text-blue-600"
+                    : "text-gray-900"
+                }`}
+              >
+                - NOTICE
+              </Link>
+            </div>
+
             {CATEGORY_ORDER.map((category) => (
               <div key={category}>
                 <Link
                   to={`/?category=${category}`}
                   onClick={() => setIsMenuOpen(false)}
-                  className={`block text-lg font-bold uppercase mb-2 ${
+                  className={`block text-lg font-bold uppercase mb-4 ${
                     currentCategory === category
                       ? "text-blue-600"
                       : "text-gray-900"
                   }`}
                 >
-                  {category}
+                  - {category}
                 </Link>
-                <div className="pl-4 flex flex-wrap gap-2">
-                  {CATEGORY_MAP[category]?.map((sub) => (
-                    <Link
-                      key={sub}
-                      to={`/?category=${category}&subCategory=${sub}`}
-                      onClick={() => setIsMenuOpen(false)}
-                      className="text-xs font-medium text-gray-500 bg-gray-50 px-2 py-1 rounded-sm"
-                    >
-                      {sub}
-                    </Link>
-                  ))}
-                </div>
               </div>
             ))}
+
             <div className="border-t border-gray-100 pt-4 flex flex-col gap-3">
               {!isAuthenticated ? (
                 <Link

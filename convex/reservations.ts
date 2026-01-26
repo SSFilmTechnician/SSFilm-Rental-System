@@ -93,26 +93,26 @@ export const getById = query({
     if (!reservation) return null;
 
     // equipment 정보를 조인해서 description, sortOrder, isGroupPrint 가져오기
-    // 배정된 자산의 시리얼 번호도 가져오기
+    // 배정된 자산의 관리코드(managementCode)도 가져오기
     const itemsWithDetails = await Promise.all(
       reservation.items.map(async (item) => {
         const equipment = await ctx.db.get(item.equipmentId);
 
-        // 배정된 자산들의 시리얼 번호 가져오기
-        let assignedSerialNumbers: string[] = [];
+        // 배정된 자산들의 관리코드 가져오기 (없으면 시리얼번호 사용)
+        let assignedManagementCodes: string[] = [];
         if (item.assignedAssets && item.assignedAssets.length > 0) {
           const assets = await Promise.all(
             item.assignedAssets.map((assetId) => ctx.db.get(assetId))
           );
-          assignedSerialNumbers = assets
+          assignedManagementCodes = assets
             .filter((a) => a !== null)
-            .map((a) => a!.serialNumber || "")
+            .map((a) => a!.managementCode || a!.serialNumber || "")
             .filter((s) => s !== "");
         }
 
         return {
           ...item,
-          assignedSerialNumbers,
+          assignedManagementCodes,
           equipment: equipment
             ? {
                 name: equipment.name,

@@ -24,13 +24,13 @@ export function EquipmentCard({
   return (
     <div
       onClick={() => navigate(`/equipment/${id}`)}
-      className="group relative flex flex-col bg-white rounded-xl border border-gray-200 overflow-hidden cursor-pointer hover:shadow-xl transition-shadow duration-300 h-full"
+      className="group relative flex flex-col bg-white rounded-xl border border-gray-200 overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-300 h-full active:scale-[0.98] touch-manipulation"
     >
-      {/* 1. 이미지 영역 (높이 h-64 고정) */}
-      <div className="relative w-full h-64 bg-white border-b border-gray-50 flex items-center justify-center p-6">
+      {/* 1. 이미지 영역 (높이 h-64 유지, 패딩만 모바일 최적화) */}
+      <div className="relative w-full h-64 bg-white border-b border-gray-50 flex items-center justify-center p-4 md:p-6">
         {/* 왼쪽 상단 뱃지 */}
         {subCategory && (
-          <span className="absolute top-3 left-3 z-10 bg-black text-white text-[10px] font-bold px-2 py-1 uppercase tracking-wide rounded-sm shadow-sm">
+          <span className="absolute top-3 left-3 z-10 bg-gray text-white text-[10px] font-bold px-2 py-1 uppercase tracking-wide rounded-sm shadow-sm">
             {subCategory}
           </span>
         )}
@@ -61,20 +61,18 @@ export function EquipmentCard({
         )}
       </div>
 
-      {/* 2. 텍스트 정보 영역 */}
-      <div className="p-5 flex flex-col justify-between flex-grow bg-white">
+      {/* 2. 텍스트 정보 영역 (패딩 및 폰트 크기 모바일 최적화) */}
+      <div className="p-4 md:p-5 flex flex-col justify-between flex-grow bg-white">
         <div>
-          <h3 className="text-lg font-bold text-gray-900 leading-tight line-clamp-2 mb-1">
+          <h3 className="text-base md:text-lg font-bold text-gray-900 leading-tight line-clamp-2 mb-1">
             {name}
           </h3>
 
-          {/* ✅ [수정] 제조사가 없어도 공간 차지 (투명 처리) */}
           <p
             className={`text-xs font-medium uppercase tracking-wider ${
               manufacturer ? "text-gray-400" : "invisible"
             }`}
           >
-            {/* 데이터가 없으면 공백 문자(\u00A0)를 넣어 높이를 유지시킴 */}
             {manufacturer || "\u00A0"}
           </p>
         </div>

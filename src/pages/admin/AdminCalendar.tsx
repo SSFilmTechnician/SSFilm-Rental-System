@@ -37,7 +37,7 @@ export default function AdminCalendar() {
 
   const [baseDate, setBaseDate] = useState(new Date());
   const [selectedRes, setSelectedRes] = useState<CalendarReservation | null>(
-    null
+    null,
   );
   const [isInventoryModalOpen, setIsInventoryModalOpen] = useState(false);
 
@@ -106,7 +106,7 @@ export default function AdminCalendar() {
         d.setDate(d.getDate() + i);
         return d;
       }),
-    [baseDate]
+    [baseDate],
   );
 
   const moveDate = (d: number) => {
@@ -440,10 +440,10 @@ export default function AdminCalendar() {
                               res.status === "pending"
                                 ? "#faad14"
                                 : res.status === "approved"
-                                ? "#1890ff"
-                                : res.status === "rented"
-                                ? "#52c41a"
-                                : "#8c8c8c",
+                                  ? "#1890ff"
+                                  : res.status === "rented"
+                                    ? "#52c41a"
+                                    : "#8c8c8c",
                             boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
                           }}
                         >
@@ -581,7 +581,8 @@ export default function AdminCalendar() {
                     lineHeight: "1.5",
                   }}
                 >
-                  {selectedRes.purposeDetail || "입력된 촬영 스케줄이 없습니다."}
+                  {selectedRes.purposeDetail ||
+                    "입력된 촬영 스케줄이 없습니다."}
                 </div>
               </div>
               <hr

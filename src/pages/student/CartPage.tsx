@@ -128,21 +128,21 @@ ${formData.inquiry || "없음"}
     );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-10 pb-32">
+    <div className="max-w-7xl mx-auto px-4 py-6 md:py-10 pb-32">
       {/* 헤더 영역 */}
-      <div className="flex items-end justify-between mb-8 border-b pb-4">
+      <div className="flex items-end justify-between mb-6 md:mb-8 border-b pb-4">
         <div>
-          <h1 className="text-3xl font-black text-gray-900">장바구니</h1>
-          <p className="text-gray-500 mt-1 text-sm">
+          <h1 className="text-2xl md:text-3xl font-black text-gray-900">장바구니</h1>
+          <p className="text-gray-500 mt-1 text-xs md:text-sm">
             신청서를 작성하고 예약을 완료하세요.
           </p>
         </div>
         {items.length > 0 && (
           <button
             onClick={() => confirm("정말 비우시겠습니까?") && clearCart()}
-            className="text-red-500 text-sm font-bold hover:bg-red-50 px-3 py-2 rounded-lg transition-colors flex items-center gap-1"
+            className="text-red-500 text-xs md:text-sm font-bold hover:bg-red-50 active:bg-red-100 px-2 md:px-3 py-2 rounded-lg transition-colors flex items-center gap-1"
           >
-            <Trash2 className="w-4 h-4" /> 전체 삭제
+            <Trash2 className="w-4 h-4" /> <span className="hidden sm:inline">전체</span> 삭제
           </button>
         )}
       </div>
@@ -174,10 +174,10 @@ ${formData.inquiry || "없음"}
                 items.map((item) => (
                   <div
                     key={item.equipmentId}
-                    className="flex gap-4 p-4 border border-gray-100 rounded-xl hover:border-blue-200 transition-colors bg-white"
+                    className="flex gap-3 md:gap-4 p-3 md:p-4 border border-gray-100 rounded-xl hover:border-blue-200 active:border-blue-300 transition-colors bg-white"
                   >
                     {/* 이미지 */}
-                    <div className="w-24 h-24 bg-gray-100 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden">
+                    <div className="w-20 h-20 md:w-24 md:h-24 bg-gray-100 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden">
                       {item.imageUrl ? (
                         <img
                           src={item.imageUrl}
@@ -190,40 +190,40 @@ ${formData.inquiry || "없음"}
                     </div>
 
                     {/* 정보 & 컨트롤 */}
-                    <div className="flex-1 flex flex-col justify-between">
+                    <div className="flex-1 flex flex-col justify-between min-w-0">
                       <div>
                         <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded mb-1 inline-block uppercase">
                           {item.category}
                         </span>
-                        <h3 className="font-bold text-gray-900 text-lg leading-tight">
+                        <h3 className="font-bold text-gray-900 text-base md:text-lg leading-tight line-clamp-2">
                           {item.name}
                         </h3>
                       </div>
 
                       <div className="flex justify-between items-end mt-2">
-                        {/* 수량 조절 */}
+                        {/* 수량 조절 - 터치 영역 확대 */}
                         <div className="flex items-center border border-gray-200 rounded-lg bg-gray-50">
                           <button
                             onClick={() => decreaseQuantity(item.equipmentId)}
-                            className="w-8 h-8 flex items-center justify-center hover:bg-gray-200 text-gray-600"
+                            className="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center hover:bg-gray-200 active:bg-gray-300 text-gray-600 text-lg font-medium"
                           >
                             -
                           </button>
-                          <span className="w-8 text-center text-sm font-bold bg-white h-8 leading-8 border-x border-gray-200">
+                          <span className="w-10 md:w-8 text-center text-sm font-bold bg-white h-10 md:h-8 leading-10 md:leading-8 border-x border-gray-200">
                             {item.quantity}
                           </span>
                           <button
                             onClick={() => increaseQuantity(item.equipmentId)}
-                            className="w-8 h-8 flex items-center justify-center hover:bg-gray-200 text-gray-600"
+                            className="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center hover:bg-gray-200 active:bg-gray-300 text-gray-600 text-lg font-medium"
                           >
                             +
                           </button>
                         </div>
 
-                        {/* 삭제 버튼 */}
+                        {/* 삭제 버튼 - 터치 영역 확대 */}
                         <button
                           onClick={() => removeItem(item.equipmentId)}
-                          className="text-gray-400 hover:text-red-500 p-2"
+                          className="text-gray-400 hover:text-red-500 active:text-red-600 p-2 -mr-2"
                         >
                           <Trash2 className="w-5 h-5" />
                         </button>
@@ -238,16 +238,16 @@ ${formData.inquiry || "없음"}
 
         {/* === 오른쪽: 신청서 폼 === */}
         <div className="w-full lg:w-[450px]">
-          <div className="sticky top-24 bg-white border border-gray-200 rounded-2xl shadow-xl overflow-hidden">
-            <div className="p-5 bg-gray-900 text-white">
-              <h2 className="text-lg font-bold flex items-center gap-2">
+          <div className="lg:sticky lg:top-24 bg-white border border-gray-200 rounded-2xl shadow-xl overflow-hidden">
+            <div className="p-4 md:p-5 bg-gray-900 text-white">
+              <h2 className="text-base md:text-lg font-bold flex items-center gap-2">
                 <FileText className="w-5 h-5" /> 예약 신청서
               </h2>
             </div>
 
             <form
               onSubmit={handleSubmit}
-              className="p-6 space-y-6 max-h-[80vh] overflow-y-auto custom-scrollbar"
+              className="p-4 md:p-6 space-y-5 md:space-y-6 lg:max-h-[80vh] lg:overflow-y-auto custom-scrollbar"
             >
               {/* 1. 대여자 정보 */}
               <div className="space-y-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
@@ -302,14 +302,14 @@ ${formData.inquiry || "없음"}
                 </h3>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="col-span-2">
-                    <label className="text-xs font-bold text-blue-600 mb-1 block">
+                    <label className="text-xs font-bold text-blue-600 mb-1.5 block">
                       대여 시작 (Pick-up)
                     </label>
-                    <div className="flex gap-1">
+                    <div className="flex gap-2">
                       <input
                         type="date"
                         required
-                        className="w-full border rounded px-2 py-2 text-sm"
+                        className="flex-1 border rounded-lg px-3 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         value={formData.startDate}
                         onChange={(e) =>
                           setFormData({
@@ -319,7 +319,7 @@ ${formData.inquiry || "없음"}
                         }
                       />
                       <select
-                        className="border rounded px-1 py-2 text-sm"
+                        className="border rounded-lg px-2 py-3 text-sm focus:ring-2 focus:ring-blue-500"
                         value={formData.startTime}
                         onChange={(e) =>
                           setFormData({
@@ -333,21 +333,21 @@ ${formData.inquiry || "없음"}
                     </div>
                   </div>
                   <div className="col-span-2">
-                    <label className="text-xs font-bold text-red-500 mb-1 block">
+                    <label className="text-xs font-bold text-red-500 mb-1.5 block">
                       반납 예정 (Return)
                     </label>
-                    <div className="flex gap-1">
+                    <div className="flex gap-2">
                       <input
                         type="date"
                         required
-                        className="w-full border rounded px-2 py-2 text-sm"
+                        className="flex-1 border rounded-lg px-3 py-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
                         value={formData.endDate}
                         onChange={(e) =>
                           setFormData({ ...formData, endDate: e.target.value })
                         }
                       />
                       <select
-                        className="border rounded px-1 py-2 text-sm"
+                        className="border rounded-lg px-2 py-3 text-sm focus:ring-2 focus:ring-red-500"
                         value={formData.endTime}
                         onChange={(e) =>
                           setFormData({ ...formData, endTime: e.target.value })
@@ -359,9 +359,8 @@ ${formData.inquiry || "없음"}
                   </div>
                 </div>
                 <textarea
-                  placeholder="상세 촬영 스케줄 (일일촬영표 기준 콜타임 · 엔드타임)
-                  예시) 1/16 12:00 - 1/16 15:00"
-                  className="w-full border rounded px-3 py-2 text-sm h-20 resize-none"
+                  placeholder="상세 촬영 스케줄 (일일촬영표 기준 콜타임 · 엔드타임)&#10;예시) 1/16 12:00 - 1/16 15:00"
+                  className="w-full border rounded-lg px-3 py-3 text-sm h-24 resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   value={formData.shootSchedule}
                   onChange={(e) =>
                     setFormData({ ...formData, shootSchedule: e.target.value })
@@ -375,7 +374,7 @@ ${formData.inquiry || "없음"}
                 <div className="grid grid-cols-2 gap-2">
                   <input
                     placeholder="연출"
-                    className="border rounded px-3 py-2 text-sm"
+                    className="border rounded-lg px-3 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     value={formData.directorName}
                     onChange={(e) =>
                       setFormData({ ...formData, directorName: e.target.value })
@@ -383,7 +382,7 @@ ${formData.inquiry || "없음"}
                   />
                   <input
                     placeholder="제작"
-                    className="border rounded px-3 py-2 text-sm"
+                    className="border rounded-lg px-3 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     value={formData.producer}
                     onChange={(e) =>
                       setFormData({ ...formData, producer: e.target.value })
@@ -391,7 +390,7 @@ ${formData.inquiry || "없음"}
                   />
                   <input
                     placeholder="음향"
-                    className="border rounded px-3 py-2 text-sm"
+                    className="border rounded-lg px-3 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     value={formData.sound}
                     onChange={(e) =>
                       setFormData({ ...formData, sound: e.target.value })
@@ -399,7 +398,7 @@ ${formData.inquiry || "없음"}
                   />
                   <input
                     placeholder="촬영"
-                    className="border rounded px-3 py-2 text-sm"
+                    className="border rounded-lg px-3 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     value={formData.cinematographer}
                     onChange={(e) =>
                       setFormData({
@@ -411,7 +410,7 @@ ${formData.inquiry || "없음"}
                 </div>
                 <textarea
                   placeholder="촬영 · 조명팀 명단"
-                  className="w-full border rounded px-3 py-2 text-sm h-16 resize-none"
+                  className="w-full border rounded-lg px-3 py-3 text-sm h-20 resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   value={formData.staffList}
                   onChange={(e) =>
                     setFormData({ ...formData, staffList: e.target.value })
@@ -423,7 +422,7 @@ ${formData.inquiry || "없음"}
               <div className="space-y-3 pt-4 border-t border-dashed">
                 <h3 className="text-sm font-bold text-gray-900">사용 목적</h3>
                 <select
-                  className="w-full border rounded px-3 py-2 text-sm"
+                  className="w-full border rounded-lg px-3 py-3 text-sm focus:ring-2 focus:ring-blue-500"
                   value={formData.purpose}
                   onChange={(e) =>
                     setFormData({ ...formData, purpose: e.target.value })
@@ -438,7 +437,7 @@ ${formData.inquiry || "없음"}
                 <input
                   required
                   placeholder="상세 목적 (예: 크리틱 4 <작품 제목> 테스트 촬영)"
-                  className="w-full border rounded px-3 py-2 text-sm"
+                  className="w-full border rounded-lg px-3 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   value={formData.purposeDetail}
                   onChange={(e) =>
                     setFormData({ ...formData, purposeDetail: e.target.value })
@@ -446,7 +445,7 @@ ${formData.inquiry || "없음"}
                 />
                 <textarea
                   placeholder="기타 문의사항"
-                  className="w-full border rounded px-3 py-2 text-sm h-16 resize-none"
+                  className="w-full border rounded-lg px-3 py-3 text-sm h-20 resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   value={formData.inquiry}
                   onChange={(e) =>
                     setFormData({ ...formData, inquiry: e.target.value })
@@ -457,7 +456,7 @@ ${formData.inquiry || "없음"}
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 active:bg-blue-800 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? "처리 중..." : "예약 신청 완료"}
               </button>
