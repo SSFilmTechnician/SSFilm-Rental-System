@@ -3,6 +3,7 @@ import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { EquipmentCard } from "@/components/equipment/EquipmentCard";
 import { CATEGORY_MAP } from "@/lib/constants";
+import { useMemo } from "react"; // ★ [추가] 필터링을 위한 useMemo
 
 // 컴포넌트 불러오기
 import HeroSlider from "@/components/common/HeroSlider";
@@ -16,11 +17,55 @@ export default function Home() {
   const category = categoryRaw ? categoryRaw.toUpperCase() : null;
   const subCategory = searchParams.get("subCategory");
 
-  // 데이터 쿼리
-  const equipmentList = useQuery(
+  // ★ [추가] 모든 카테고리 정보를 가져와서 "진짜 ID"를 찾을 준비
+  const categories = useQuery(api.equipment.getCategories);
+
+  // 데이터 쿼리 (기존대로 가져오되, 아래에서 ID로 한 번 더 걸러냄)
+  const rawEquipmentList = useQuery(
     api.equipment.getList,
     category ? { category, subCategory: subCategory || undefined } : "skip",
   );
+
+  // ★ [핵심 수정] 이름(String)이 같아서 발생하는 오류를 고유 ID(Object ID)로 원천 차단
+  const equipmentList = useMemo(() => {
+    if (!rawEquipmentList || !categories || !category) return rawEquipmentList;
+
+    // 카테고리명 정규화 함수 (TRIPOD/GRIP ↔ TRIPOD · GRIP 호환)
+    const normalizeCategory = (name: string) =>
+      name.toUpperCase().replace(/[·/\s]/g, "");
+
+    // 1. 현재 선택된 대분류의 "진짜 ID" 찾기 (조건: 이름이 같고, 부모가 없어야 함 = 대분류)
+    const exactParentCat = categories.find(
+      (c) => normalizeCategory(c.name) === normalizeCategory(category) && !c.parentId,
+    );
+
+    if (!exactParentCat) return []; // 대분류를 못 찾으면 빈 배열
+
+    // 2. 이 대분류 밑에 속한 진짜 자식(소분류)들의 ID 목록 수집
+    const validChildIds = categories
+      .filter((c) => c.parentId === exactParentCat._id)
+      .map((c) => c._id);
+
+    // 3. 가져온 장비 리스트에서 가짜(이름만 같은 다른 카테고리)를 걸러냄
+    return rawEquipmentList.filter((item) => {
+      if (subCategory) {
+        // 소분류가 선택된 경우: 해당 대분류 밑에 있는 그 소분류 ID와 정확히 일치해야 함
+        const exactSubCat = categories.find(
+          (c) =>
+            c.name.toUpperCase() === subCategory.toUpperCase() &&
+            c.parentId === exactParentCat._id,
+        );
+        return exactSubCat ? item.categoryId === exactSubCat._id : false;
+      } else {
+        // 소분류가 없을 때(대분류만 클릭): 대분류 ID이거나, 그 대분류의 진짜 자식 ID여야 함
+        // (즉, MONITOR 밑의 ACC ID를 가진 SDI/HDMI는 대분류 ACC 화면에서 자동 탈락됨)
+        return (
+          item.categoryId === exactParentCat._id ||
+          validChildIds.includes(item.categoryId)
+        );
+      }
+    });
+  }, [rawEquipmentList, categories, category, subCategory]);
 
   // 소분류(SubCategory) 필터링 핸들러
   const handleSubClick = (sub: string) => {
@@ -48,7 +93,6 @@ export default function Home() {
 
   // ------------------------------------------------------------------
   // 2. [로딩 화면] 카테고리는 선택됐는데, 데이터가 아직 도착하지 않았을 때
-  //    ✅ 여기서 미리 return을 해버려서 제목이나 버튼이 아예 안 보이게 합니다.
   // ------------------------------------------------------------------
   if (equipmentList === undefined) {
     return (
@@ -62,7 +106,6 @@ export default function Home() {
 
   // ------------------------------------------------------------------
   // 3. [데이터 로드 완료] 장비 리스트 화면
-  //    (이제 equipmentList가 확실히 있는 상태에서만 화면을 그립니다)
   // ------------------------------------------------------------------
   return (
     <div className="min-h-screen pb-20 flex flex-col">

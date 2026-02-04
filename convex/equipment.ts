@@ -186,3 +186,221 @@ export const toggleVisibility = mutation({
     await ctx.db.patch(args.id, { isVisible: args.isVisible });
   },
 });
+
+// ★ [추가] 중복 카테고리 찾기
+export const findDuplicateCategories = query({
+  args: {},
+  handler: async (ctx) => {
+    const allCategories = await ctx.db.query("categories").collect();
+
+    // 같은 parentId를 가진 카테고리들 중 이름이 같은 것 찾기
+    const grouped: Record<string, typeof allCategories> = {};
+    for (const cat of allCategories) {
+      const key = `${cat.parentId || "root"}_${cat.name.trim().toLowerCase()}`;
+      if (!grouped[key]) {
+        grouped[key] = [];
+      }
+      grouped[key].push(cat);
+    }
+
+    const duplicates = [];
+    for (const [key, items] of Object.entries(grouped)) {
+      if (items.length > 1) {
+        duplicates.push({
+          key,
+          name: items[0].name,
+          parentId: items[0].parentId,
+          count: items.length,
+          items: items.map((c) => ({ id: c._id, name: c.name, order: c.order })),
+        });
+      }
+    }
+    return duplicates;
+  },
+});
+
+// ★ [추가] 중복 카테고리 삭제 (ID로 삭제)
+export const removeCategory = mutation({
+  args: { id: v.id("categories") },
+  handler: async (ctx, args) => {
+    // 해당 카테고리를 사용하는 장비가 있는지 확인
+    const equipmentUsingCategory = await ctx.db
+      .query("equipment")
+      .withIndex("by_category", (q) => q.eq("categoryId", args.id))
+      .collect();
+
+    if (equipmentUsingCategory.length > 0) {
+      throw new Error(
+        `이 카테고리를 사용하는 장비가 ${equipmentUsingCategory.length}개 있습니다. 먼저 장비를 다른 카테고리로 이동하세요.`
+      );
+    }
+
+    await ctx.db.delete(args.id);
+    return args.id;
+  },
+});
+
+// ★ [추가] 중복 TRIPOD 카테고리 정리 (사용하지 않는 중복 삭제)
+export const cleanupDuplicateTripod = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const allCategories = await ctx.db.query("categories").collect();
+
+    // TRIPOD · GRIP 부모 카테고리 찾기
+    const tripodGripParent = allCategories.find(
+      (c) => c.name.toUpperCase().includes("TRIPOD") && c.name.includes("GRIP") && !c.parentId
+    );
+
+    if (!tripodGripParent) {
+      return { message: "TRIPOD · GRIP 부모 카테고리를 찾을 수 없습니다.", deleted: 0 };
+    }
+
+    // TRIPOD · GRIP 하위의 TRIPOD 서브카테고리들 찾기
+    const tripodSubcategories = allCategories.filter(
+      (c) =>
+        c.parentId === tripodGripParent._id &&
+        c.name.toUpperCase() === "TRIPOD"
+    );
+
+    if (tripodSubcategories.length <= 1) {
+      return { message: "중복 TRIPOD 카테고리가 없습니다.", deleted: 0 };
+    }
+
+    // 각 TRIPOD 카테고리가 사용하는 장비 수 확인
+    const categoriesWithUsage = await Promise.all(
+      tripodSubcategories.map(async (cat) => {
+        const equipment = await ctx.db
+          .query("equipment")
+          .withIndex("by_category", (q) => q.eq("categoryId", cat._id))
+          .collect();
+        return { ...cat, equipmentCount: equipment.length };
+      })
+    );
+
+    // 장비가 없는 중복 카테고리 삭제
+    let deletedCount = 0;
+    const keptCategory = categoriesWithUsage.find((c) => c.equipmentCount > 0) || categoriesWithUsage[0];
+
+    for (const cat of categoriesWithUsage) {
+      if (cat._id !== keptCategory._id && cat.equipmentCount === 0) {
+        await ctx.db.delete(cat._id);
+        deletedCount++;
+      }
+    }
+
+    return {
+      message: `${deletedCount}개의 중복 TRIPOD 카테고리를 삭제했습니다.`,
+      deleted: deletedCount,
+      kept: keptCategory._id
+    };
+  },
+});
+
+export const findDuplicatedEquipment = query({
+  args: {},
+  handler: async (ctx) => {
+    // 1. 모든 장비 데이터를 가져옵니다.
+    const allEquipment = await ctx.db.query("equipment").collect();
+
+    // 2. 장비 이름(name)을 기준으로 그룹화합니다.
+    const groupedByName: Record<string, typeof allEquipment> = {};
+    for (const item of allEquipment) {
+      // 띄어쓰기나 대소문자 차이로 중복을 놓치지 않도록 이름을 정리합니다.
+      const normalizedName = item.name.trim().toLowerCase();
+      if (!groupedByName[normalizedName]) {
+        groupedByName[normalizedName] = [];
+      }
+      groupedByName[normalizedName].push(item);
+    }
+
+    // 3. 2개 이상 등록된 '중복 장비'만 추려냅니다.
+    const duplicates = [];
+    for (const [name, items] of Object.entries(groupedByName)) {
+      if (items.length > 1) {
+        // 보기 편하도록 카테고리 이름까지 조회해서 합쳐줍니다.
+        const itemDetails = await Promise.all(
+          items.map(async (item) => {
+            const category = await ctx.db.get(item.categoryId);
+            return {
+              id: item._id, // 삭제할 때 필요한 ID
+              originalName: item.name,
+              categoryName: category?.name || "알 수 없는 카테고리",
+              totalQuantity: item.totalQuantity,
+            };
+          }),
+        );
+
+        duplicates.push({
+          duplicateName: name,
+          count: items.length,
+          items: itemDetails,
+        });
+      }
+    }
+
+    return duplicates; // 중복 목록 반환
+  },
+});
+
+// ★ [추가] 중복 TRIPOD 카테고리 상세 조회 (어떤 장비가 있는지 확인)
+export const getDuplicateTripodDetails = query({
+  args: {},
+  handler: async (ctx) => {
+    const allCategories = await ctx.db.query("categories").collect();
+
+    // TRIPOD · GRIP 부모 카테고리 찾기
+    const tripodGripParent = allCategories.find(
+      (c) => c.name.toUpperCase().includes("TRIPOD") && c.name.includes("GRIP") && !c.parentId
+    );
+
+    if (!tripodGripParent) {
+      return { message: "TRIPOD · GRIP 부모 카테고리를 찾을 수 없습니다.", categories: [] };
+    }
+
+    // TRIPOD · GRIP 하위의 TRIPOD 서브카테고리들 찾기
+    const tripodSubcategories = allCategories.filter(
+      (c) =>
+        c.parentId === tripodGripParent._id &&
+        c.name.toUpperCase() === "TRIPOD"
+    );
+
+    // 각 카테고리별 장비 목록 조회
+    const categoriesWithEquipment = await Promise.all(
+      tripodSubcategories.map(async (cat) => {
+        const equipment = await ctx.db
+          .query("equipment")
+          .withIndex("by_category", (q) => q.eq("categoryId", cat._id))
+          .collect();
+        return {
+          categoryId: cat._id,
+          categoryName: cat.name,
+          order: cat.order,
+          equipmentCount: equipment.length,
+          equipment: equipment.map(eq => ({
+            id: eq._id,
+            name: eq.name,
+            totalQuantity: eq.totalQuantity,
+          })),
+        };
+      })
+    );
+
+    return {
+      message: `${tripodSubcategories.length}개의 TRIPOD 서브카테고리를 찾았습니다.`,
+      parentCategory: tripodGripParent.name,
+      categories: categoriesWithEquipment,
+    };
+  },
+});
+
+// ★ [추가] 장비의 카테고리 변경
+export const moveEquipmentToCategory = mutation({
+  args: {
+    equipmentId: v.id("equipment"),
+    newCategoryId: v.id("categories"),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.equipmentId, { categoryId: args.newCategoryId });
+    return args.equipmentId;
+  },
+});

@@ -10,6 +10,7 @@
 
 import type * as admin from "../admin.js";
 import type * as assets from "../assets.js";
+import type * as chatbot from "../chatbot.js";
 import type * as equipment from "../equipment.js";
 import type * as migration from "../migration.js";
 import type * as notifications from "../notifications.js";
@@ -25,6 +26,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   assets: typeof assets;
+  chatbot: typeof chatbot;
   equipment: typeof equipment;
   migration: typeof migration;
   notifications: typeof notifications;

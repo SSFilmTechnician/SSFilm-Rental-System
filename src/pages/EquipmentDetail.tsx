@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery } from "convex/react";
+import { useQuery, useConvexAuth } from "convex/react";
 import { ArrowLeft, ShoppingCart } from "lucide-react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -11,6 +11,7 @@ export default function EquipmentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [quantity, setQuantity] = useState(1);
+  const { isAuthenticated } = useConvexAuth();
   const addItem = useCartStore((state) => state.addItem);
 
   // 1. Convex로 장비 데이터 불러오기
@@ -84,9 +85,11 @@ export default function EquipmentDetail() {
             <h1 className="text-4xl font-bold text-gray-900 mb-2">
               {equipment.name}
             </h1>
-            <p className="text-gray-500 text-lg leading-relaxed">
-              {equipment.description || "상세 설명이 없습니다."}
-            </p>
+            {equipment.description && (
+              <p className="text-gray-500 text-lg leading-relaxed">
+                {equipment.description}
+              </p>
+            )}
 
             {equipment.manufacturer && (
               <p className="text-sm text-gray-400 mt-2">
@@ -95,50 +98,51 @@ export default function EquipmentDetail() {
             )}
           </div>
 
-          <div className="border-t border-gray-200 pt-6">
-            <div className="flex items-center justify-between mb-6">
-              <span className="text-lg font-bold text-gray-700">대여 수량</span>
+          {/* 로그인한 경우에만 장바구니 담기 섹션 표시 */}
+          {isAuthenticated && (
+            <div className="border-t border-gray-200 pt-6">
+              <div className="flex items-center justify-between mb-6">
+                <span className="text-lg font-bold text-gray-700">대여 수량</span>
 
-              <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
-                <button
-                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold transition-colors border-r"
-                >
-                  -
-                </button>
-                <div className="px-6 py-2 font-bold text-gray-900 bg-white min-w-[3rem] text-center">
-                  {quantity}
+                <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    className="px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold transition-colors border-r"
+                  >
+                    -
+                  </button>
+                  <div className="px-6 py-2 font-bold text-gray-900 bg-white min-w-[3rem] text-center">
+                    {quantity}
+                  </div>
+                  <button
+                    onClick={() => setQuantity(quantity + 1)}
+                    className="px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold transition-colors border-l"
+                  >
+                    +
+                  </button>
                 </div>
+              </div>
+
+              <div className="flex flex-col gap-3">
                 <button
-                  onClick={() => setQuantity(quantity + 1)}
-                  className="px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold transition-colors border-l"
-                  // 재고보다 많이 선택 못하게 하려면 아래 조건 추가 가능
-                  // disabled={quantity >= equipment.totalQuantity}
+                  onClick={handleAddToCart}
+                  disabled={equipment.totalQuantity === 0}
+                  className={`w-full text-white text-lg py-4 rounded-xl font-bold transition-colors flex items-center justify-center gap-2 shadow-lg ${
+                    equipment.totalQuantity === 0
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-gray-900 hover:bg-black"
+                  }`}
                 >
-                  +
+                  <ShoppingCart className="w-6 h-6" />
+                  {equipment.totalQuantity === 0 ? "품절" : "장바구니 담기"}
                 </button>
               </div>
-            </div>
 
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={handleAddToCart}
-                disabled={equipment.totalQuantity === 0}
-                className={`w-full text-white text-lg py-4 rounded-xl font-bold transition-colors flex items-center justify-center gap-2 shadow-lg ${
-                  equipment.totalQuantity === 0
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-gray-900 hover:bg-black"
-                }`}
-              >
-                <ShoppingCart className="w-6 h-6" />
-                {equipment.totalQuantity === 0 ? "품절" : "장바구니 담기"}
-              </button>
+              <p className="text-center text-xs text-gray-400 mt-4">
+                * 장바구니에 담은 후 예약 페이지에서 날짜를 선택합니다.
+              </p>
             </div>
-
-            <p className="text-center text-xs text-gray-400 mt-4">
-              * 장바구니에 담은 후 예약 페이지에서 날짜를 선택합니다.
-            </p>
-          </div>
+          )}
         </div>
       </div>
     </div>
