@@ -60,11 +60,20 @@ export default function AssetAssignmentModal({
 
   if (!isOpen) return null;
 
-  // 장비별로 사용 가능한 개별 장비 필터링
+  // 장비별로 사용 가능한 개별 장비 필터링 (현재 예약에 배정된 장비도 포함)
   const getAvailableAssets = (equipmentId: Id<"equipment">): AssetData[] => {
     if (!allAssets) return [];
+
+    // 현재 이 예약에 자동 배정된 장비 ID
+    const currentAssigned =
+      items.find((i) => i.equipmentId === equipmentId)?.assignedAssets || [];
+
     return allAssets
-      .filter((a) => a.equipmentId === equipmentId && a.status === "available")
+      .filter(
+        (a) =>
+          a.equipmentId === equipmentId &&
+          (a.status === "available" || currentAssigned.includes(a._id)),
+      )
       .sort((a, b) => {
         const aNum = parseInt(a.serialNumber || "");
         const bNum = parseInt(b.serialNumber || "");
