@@ -207,13 +207,13 @@ export default function RulesPage() {
 
                 {/* 2. 버튼(a)에 mt-auto 추가: 위쪽 여백을 모두 차지해서 바닥으로 밀어냄 */}
                 <a
-                  href="https://여기에_신청_사이트_주소를_넣으세요"
+                  href="https://ssfilm-v0-extra.19721121.xyz/embed"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-auto pt-6 flex items-center justify-center gap-2 w-full"
                 >
                   <div className="w-full py-3 rounded-lg bg-indigo-900 text-white text-sm font-bold hover:bg-indigo-800 transition-all shadow-sm flex items-center justify-center gap-2">
-                    🔗 공간 사용 신청 사이트 바로가기
+                    공간 사용 신청 사이트 바로가기
                   </div>
                 </a>
               </div>
