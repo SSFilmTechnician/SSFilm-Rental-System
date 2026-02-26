@@ -181,7 +181,7 @@ export default function StepBasicInfo() {
               {crewSize === 2 && "2명: FX3 기반 소규모 촬영"}
               {crewSize === 3 && "3명: 소규모 시네마 구성"}
               {crewSize >= 4 && crewSize <= 6 && "4~6명: Alexa Mini 기반 본격 시네마 구성"}
-              {crewSize >= 7 && "7명+: 대규모 촬영 (듀얼 카메라 가능)"}
+              {crewSize >= 7 && "7명 이상: 대규모 촬영"}
             </p>
           </div>
         </div>

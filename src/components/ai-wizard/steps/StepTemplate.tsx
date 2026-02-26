@@ -13,9 +13,23 @@ interface StepTemplateProps {
 
 export default function StepTemplate({ step, title, icon: Icon, infoMessage }: StepTemplateProps) {
   const { state, dispatch } = useAIWizard();
-  const { recommendation, isLoading, error, fetchRecommendation } = useAIRecommendation();
+  const { recommendation, isLoading, error, loadingMessage, fetchRecommendation } = useAIRecommendation();
 
-  const selectionKey = step as keyof typeof state.selections;
+  // Map step names to state selection keys (convert snake_case to camelCase)
+  const stepToSelectionKey = (step: WizardStep): keyof typeof state.selections => {
+    const mapping: Record<string, keyof typeof state.selections> = {
+      camera: "camera",
+      lens: "lens",
+      tripod_grip: "tripodGrip",
+      monitor: "monitor",
+      lighting: "lighting",
+      stand: "stand",
+      accessory: "accessory",
+    };
+    return mapping[step] || step as keyof typeof state.selections;
+  };
+
+  const selectionKey = stepToSelectionKey(step);
   const [localSelections, setLocalSelections] = useState<EquipmentSelection[]>(
     state.selections[selectionKey] || []
   );
@@ -58,7 +72,7 @@ export default function StepTemplate({ step, title, icon: Icon, infoMessage }: S
   const handleNext = () => {
     // 선택한 장비들을 상태에 저장
     localSelections.forEach((selection) => {
-      const existing = state.selections[selectionKey].find(
+      const existing = (state.selections[selectionKey] || []).find(
         (item) => item.equipmentId === selection.equipmentId
       );
 
@@ -80,7 +94,7 @@ export default function StepTemplate({ step, title, icon: Icon, infoMessage }: S
     });
 
     // 수량이 0인 항목 제거
-    state.selections[selectionKey].forEach((item) => {
+    (state.selections[selectionKey] || []).forEach((item) => {
       const local = localSelections.find((s) => s.equipmentId === item.equipmentId);
       if (!local || local.quantity === 0) {
         dispatch({
@@ -118,7 +132,9 @@ export default function StepTemplate({ step, title, icon: Icon, infoMessage }: S
       {isLoading && (
         <div className="flex flex-col items-center justify-center py-12 space-y-3">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
-          <p className="text-sm text-gray-500">AI가 최적의 {title}을(를) 분석중입니다...</p>
+          <p className="text-sm text-gray-500">
+            {loadingMessage || `AI가 최적의 ${title}을(를) 분석중입니다...`}
+          </p>
         </div>
       )}
 
@@ -141,15 +157,20 @@ export default function StepTemplate({ step, title, icon: Icon, infoMessage }: S
 
       {/* AI 추천 장비 */}
       {recommendation && !isLoading && (
-        <div className="space-y-4">
-          <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-purple-600" />
-            AI 추천 {title}
-          </h3>
+        <div className="space-y-6">
+          {/* 재고 있는 추천 장비 */}
+          {recommendation.recommended.filter(item => item.availableQuantity > 0).length > 0 && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-purple-600" />
+                AI 추천 {title}
+              </h3>
 
-          {recommendation.recommended.map((item) => {
+              {recommendation.recommended.filter(item => item.availableQuantity > 0).map((item) => {
             const quantity = getSelectedQuantity(item.equipmentId);
             const isSelected = quantity > 0;
+            // 이미 재고 > 0으로 필터링했으므로 isOutOfStock은 항상 false
+            const isLowStock = item.availableQuantity < item.quantity;
 
             return (
               <div
@@ -169,8 +190,18 @@ export default function StepTemplate({ step, title, icon: Icon, infoMessage }: S
                           AI 추천
                         </span>
                       )}
+                      {isLowStock && (
+                        <span className="text-xs font-bold text-orange-700 bg-orange-100 px-2 py-0.5 rounded border border-orange-200">
+                          재고 부족
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-gray-600 leading-relaxed">{item.reason}</p>
+                    {isLowStock && (
+                      <p className="text-xs text-orange-600 mt-1 font-medium">
+                        ⚠️ 추천 수량 {item.quantity}개, 현재 재고 {item.availableQuantity}개
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -192,8 +223,7 @@ export default function StepTemplate({ step, title, icon: Icon, infoMessage }: S
                             isAIRecommended: item.isAIRecommended,
                           })
                         }
-                        disabled={item.availableQuantity === 0}
-                        className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                        className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors active:scale-95"
                       >
                         선택
                       </button>
@@ -222,6 +252,8 @@ export default function StepTemplate({ step, title, icon: Icon, infoMessage }: S
               </div>
             );
           })}
+            </div>
+          )}
         </div>
       )}
 
@@ -233,6 +265,7 @@ export default function StepTemplate({ step, title, icon: Icon, infoMessage }: S
           {recommendation.alternatives.map((item) => {
             const quantity = getSelectedQuantity(item.equipmentId);
             const isSelected = quantity > 0;
+            const isOutOfStock = item.availableQuantity === 0;
 
             return (
               <div
@@ -240,19 +273,28 @@ export default function StepTemplate({ step, title, icon: Icon, infoMessage }: S
                 className={`border rounded-xl p-4 transition-all ${
                   isSelected
                     ? "border-gray-400 bg-gray-50 shadow-sm"
+                    : isOutOfStock
+                    ? "border-red-200 bg-red-50/30"
                     : "border-gray-200 bg-white hover:border-gray-300"
                 }`}
               >
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex-1">
-                    <h4 className="font-bold text-gray-900 mb-1">{item.equipmentName}</h4>
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <h4 className="font-bold text-gray-900">{item.equipmentName}</h4>
+                      {isOutOfStock && (
+                        <span className="text-xs font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded border border-red-200">
+                          품절
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-600 leading-relaxed">{item.reason}</p>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
-                  <span className="text-xs text-gray-500">
-                    재고: <strong className="text-gray-700">{item.availableQuantity}</strong>
+                  <span className={`text-xs ${isOutOfStock ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                    재고: <strong className={isOutOfStock ? 'text-red-700' : 'text-gray-700'}>{item.availableQuantity}</strong>
                   </span>
 
                   <div className="flex items-center gap-2">
@@ -293,6 +335,51 @@ export default function StepTemplate({ step, title, icon: Icon, infoMessage }: S
                       </div>
                     )}
                   </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 재고 불가능 장비 */}
+      {recommendation && recommendation.recommended.filter(item => item.availableQuantity === 0).length > 0 && (
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+            <span className="text-red-600">⚠️ 재고 불가능 장비</span>
+          </h3>
+          <p className="text-xs text-gray-600">
+            AI가 추천하는 장비이지만 현재 재고가 없습니다. 대안 장비를 확인해주세요.
+          </p>
+
+          {recommendation.recommended.filter(item => item.availableQuantity === 0).map((item) => {
+            return (
+              <div
+                key={item.equipmentId}
+                className="border-2 border-red-200 bg-red-50/50 rounded-xl p-4 opacity-75"
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <h4 className="font-bold text-gray-900">{item.equipmentName}</h4>
+                      <span className="text-xs font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded border border-red-200">
+                        품절
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 leading-relaxed">{item.reason}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-red-200">
+                  <span className="text-xs text-red-600 font-semibold">
+                    재고: <strong className="text-red-700">0</strong>
+                  </span>
+                  <button
+                    disabled
+                    className="bg-gray-300 text-gray-500 px-4 py-1.5 rounded-lg text-sm font-bold cursor-not-allowed"
+                  >
+                    선택 불가
+                  </button>
                 </div>
               </div>
             );
