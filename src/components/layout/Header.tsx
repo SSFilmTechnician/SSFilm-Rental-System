@@ -334,6 +334,22 @@ export default function Header() {
               </Link>
             </div>
 
+            {/* 실시간 장비현황: 오른쪽 고정 (로그인 시에만 표시) */}
+            {isAuthenticated && (
+              <div className="absolute right-0 flex items-center h-full">
+                <Link
+                  to="/inventory"
+                  className={`px-4 py-2 text-sm font-bold whitespace-nowrap rounded-md transition-colors flex items-center gap-1 uppercase tracking-wide ${
+                    location.pathname === "/inventory"
+                      ? "text-blue-600 bg-blue-50"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                  }`}
+                >
+                  실시간 장비현황
+                </Link>
+              </div>
+            )}
+
             {/* 카테고리: 중앙 정렬 */}
             <nav className="flex space-x-1 h-full items-center">
               {CATEGORY_ORDER.map((catKey) => {
@@ -405,6 +421,19 @@ export default function Header() {
               >
                 - NOTICE
               </Link>
+              {isAuthenticated && (
+                <Link
+                  to="/inventory"
+                  onClick={() => setIsMenuOpen(false)}
+                  className={`block text-lg font-bold mb-4 ${
+                    location.pathname === "/inventory"
+                      ? "text-blue-600"
+                      : "text-gray-900"
+                  }`}
+                >
+                  - 실시간 장비현황
+                </Link>
+              )}
             </div>
 
             {CATEGORY_ORDER.map((category) => (

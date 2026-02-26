@@ -153,4 +153,54 @@ export default defineSchema({
   })
     .index("by_userId", ["userId"])
     .index("by_userId_read", ["userId", "read"]),
+
+  // 9. 엑셀 가져오기/내보내기 로그 테이블
+  excelLogs: defineTable({
+    userId: v.id("users"),
+    userName: v.string(),
+    userEmail: v.string(),
+    action: v.string(), // "export" | "import"
+    fileName: v.string(),
+    equipmentCount: v.optional(v.number()),
+    assetCount: v.optional(v.number()),
+    importResult: v.optional(v.object({
+      equipmentCreated: v.number(),
+      equipmentUpdated: v.number(),
+      equipmentErrors: v.number(),
+      assetCreated: v.number(),
+      assetUpdated: v.number(),
+      assetErrors: v.number(),
+    })),
+    timestamp: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_action", ["action"])
+    .index("by_timestamp", ["timestamp"]),
+
+  // 10. 장비/자산 변경 이력 테이블
+  changeHistory: defineTable({
+    versionMajor: v.number(), // 엑셀 Import 시에만 증가
+    versionMinor: v.number(), // 수동 수정 시 증가
+    userId: v.string(),
+    userName: v.string(),
+    userEmail: v.string(),
+    targetType: v.string(), // "equipment" | "asset"
+    targetId: v.string(),
+    targetName: v.string(),
+    action: v.string(), // "create" | "update" | "delete" | "status_change"
+    changes: v.array(v.object({
+      field: v.string(),
+      fieldLabel: v.string(),
+      oldValue: v.optional(v.string()),
+      newValue: v.optional(v.string()),
+    })),
+    source: v.string(), // "manual" | "excel_import"
+    sourceDetail: v.optional(v.string()),
+    batchId: v.optional(v.string()),
+    timestamp: v.number(),
+  })
+    .index("by_timestamp", ["timestamp"])
+    .index("by_targetId", ["targetId", "timestamp"])
+    .index("by_batchId", ["batchId"])
+    .index("by_version", ["versionMajor", "versionMinor"]),
 });

@@ -11,10 +11,12 @@ import RulesPage from "./pages/RulesPage";
 // 2. 학생용 페이지
 import CartPage from "./pages/student/CartPage";
 import MyPage from "./pages/student/MyPage";
+import InventoryCalendar from "./pages/InventoryCalendar";
 
 // 3. 관리자용 페이지
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminCalendar from "./pages/admin/AdminCalendar";
+import EquipmentLog from "./pages/admin/EquipmentLog";
 
 // 4. 인쇄/유틸리티 페이지
 import ReservationPrint from "./pages/print/ReservationPrint";
@@ -47,6 +49,16 @@ function App() {
           <Route index element={<Home />} />
           <Route path="equipment/:id" element={<EquipmentDetail />} />
           <Route path="rules" element={<RulesPage />} />
+          <Route
+            path="inventory"
+            element={
+              <Authenticated>
+                <AuthWrapper>
+                  <InventoryCalendar />
+                </AuthWrapper>
+              </Authenticated>
+            }
+          />
 
           {/* [비로그인 전용] 로그인 상태면 홈으로 튕김 (Unauthenticated 처리) */}
           <Route
@@ -102,6 +114,18 @@ function App() {
             <Authenticated>
               <AuthWrapper>
                 <AdminCalendar />
+              </AuthWrapper>
+            </Authenticated>
+          }
+        />
+
+        {/* 장비 변경 로그 */}
+        <Route
+          path="admin/equipment-log"
+          element={
+            <Authenticated>
+              <AuthWrapper>
+                <EquipmentLog />
               </AuthWrapper>
             </Authenticated>
           }

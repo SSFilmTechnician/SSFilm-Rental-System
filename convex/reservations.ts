@@ -85,7 +85,52 @@ export const getMyReservations = query({
   },
 });
 
-// 3. 예약 상세 정보 가져오기 (인쇄용)
+// 3. [재고조회] 특정 장비의 날짜 범위 내 예약 데이터 조회 (학생용 캘린더)
+export const getEquipmentCalendarData = query({
+  args: {
+    equipmentId: v.id("equipment"),
+    startDate: v.string(), // YYYY-MM-DD
+    endDate: v.string(),   // YYYY-MM-DD
+  },
+  handler: async (ctx, args) => {
+    const equipment = await ctx.db.get(args.equipmentId);
+    if (!equipment) return null;
+
+    const allReservations = await ctx.db.query("reservations").collect();
+
+    // 재고를 실제로 점유하는 상태: 대기/승인/대여중
+    const OCCUPYING_STATUSES = ["pending", "approved", "rented"];
+
+    const relevant = allReservations.filter((r) => {
+      // 재고 점유 상태가 아니면 제외 (반납완료, 취소, 반려 등)
+      if (!OCCUPYING_STATUSES.includes(r.status)) return false;
+      // DB 날짜는 "YYYY-MM-DD HH:MM" 형식으로 저장되므로 앞 10자리(날짜)만 비교
+      const rStart = r.startDate.substring(0, 10);
+      const rEnd = r.endDate.substring(0, 10);
+      // 날짜 범위 겹침 확인 (rStart <= args.endDate AND rEnd >= args.startDate)
+      if (rStart > args.endDate || rEnd < args.startDate) return false;
+      // 해당 장비가 포함된 예약인지 확인
+      return r.items.some((item) => String(item.equipmentId) === String(args.equipmentId));
+    });
+
+    return {
+      totalQuantity: equipment.totalQuantity,
+      reservations: relevant.map((r) => {
+        const item = r.items.find((i) => String(i.equipmentId) === String(args.equipmentId))!;
+        return {
+          leaderName: r.leaderName,
+          purposeDetail: r.purposeDetail,
+          startDate: r.startDate,
+          endDate: r.endDate,
+          quantity: item.quantity,
+          status: r.status,
+        };
+      }),
+    };
+  },
+});
+
+// 4. 예약 상세 정보 가져오기 (인쇄용)
 export const getById = query({
   args: { id: v.id("reservations") },
   handler: async (ctx, args) => {

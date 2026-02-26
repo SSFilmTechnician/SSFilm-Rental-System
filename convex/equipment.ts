@@ -1,5 +1,7 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 
 // 1. [학생용] 장비 목록 가져오기 (숨김 장비는 제외됨)
 export const getList = query({
@@ -50,12 +52,22 @@ export const getList = query({
       return true;
     });
 
-    return filtered.sort((a, b) => {
-      const orderA = a.sortOrder ?? 9999;
-      const orderB = b.sortOrder ?? 9999;
-      if (orderA !== orderB) return orderA - orderB;
-      return a.name.localeCompare(b.name);
-    });
+    return filtered
+      .sort((a, b) => {
+        const orderA = a.sortOrder ?? 9999;
+        const orderB = b.sortOrder ?? 9999;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.name.localeCompare(b.name);
+      })
+      .map((eq) => {
+        const cat = categoryMap.get(eq.categoryId);
+        const parentCat = cat?.parentId ? categoryMap.get(cat.parentId) : null;
+        return {
+          ...eq,
+          categoryName: cat?.name ?? "",
+          parentCategoryName: parentCat?.name ?? "",
+        };
+      });
   },
 });
 
@@ -81,6 +93,159 @@ export const getAll = query({
   },
 });
 
+// 3-1. [엑셀 내보내기용] 카테고리 정보 포함 전체 장비 목록
+export const getAllForExport = query({
+  args: {},
+  handler: async (ctx) => {
+    const allEquipment = await ctx.db.query("equipment").collect();
+    const allCategories = await ctx.db.query("categories").collect();
+    const categoryMap = new Map(allCategories.map((c) => [c._id, c]));
+
+    return allEquipment
+      .sort((a, b) => {
+        const orderA = a.sortOrder ?? 9999;
+        const orderB = b.sortOrder ?? 9999;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.name.localeCompare(b.name);
+      })
+      .map((eq) => {
+        const cat = categoryMap.get(eq.categoryId);
+        const parentCat = cat?.parentId ? categoryMap.get(cat.parentId) : null;
+        return {
+          _id: eq._id,
+          name: eq.name,
+          category: parentCat?.name ?? cat?.name ?? "",
+          subCategory: parentCat ? (cat?.name ?? "") : "",
+          totalQuantity: eq.totalQuantity,
+          description: eq.description ?? "",
+          isVisible: eq.isVisible !== false,
+        };
+      });
+  },
+});
+
+// 3-2. [엑셀 가져오기] 장비 일괄 upsert (신규 생성 or 기존 수정)
+export const bulkUpsertEquipment = mutation({
+  args: {
+    items: v.array(
+      v.object({
+        id: v.optional(v.string()),          // 기존 _id (수정용)
+        name: v.string(),
+        categoryName: v.optional(v.string()),
+        subCategoryName: v.optional(v.string()),
+        totalQuantity: v.optional(v.number()),
+        description: v.optional(v.string()),
+        isVisible: v.optional(v.boolean()),
+      })
+    ),
+    fileName: v.optional(v.string()), // 엑셀 파일명 (변경 이력 기록용)
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    const allCategories = await ctx.db.query("categories").collect();
+    const batchId = `excel_import_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    let created = 0, updated = 0, errors = 0;
+
+    for (const item of args.items) {
+      try {
+        // 카테고리 조회 (서브카테고리 우선)
+        const targetCatName = item.subCategoryName || item.categoryName;
+        const matchedCat = targetCatName
+          ? allCategories.find(
+              (c) => c.name.toLowerCase() === targetCatName.toLowerCase()
+            )
+          : null;
+
+        if (item.id) {
+          // 수정: ID로 직접 patch
+          const eqId = item.id as Id<"equipment">;
+          const existing = await ctx.db.get(eqId);
+          if (!existing) { errors++; continue; }
+
+          const oldCategory = await ctx.db.get(existing.categoryId);
+          const patch: Partial<{ name: string; totalQuantity: number; description: string; isVisible: boolean; categoryId: Id<"categories"> }> = { name: item.name };
+          if (item.totalQuantity !== undefined) patch.totalQuantity = item.totalQuantity;
+          if (item.description !== undefined) patch.description = item.description;
+          if (item.isVisible !== undefined) patch.isVisible = item.isVisible;
+          if (matchedCat) patch.categoryId = matchedCat._id;
+          await ctx.db.patch(eqId, patch);
+          updated++;
+
+          // 변경 이력 기록
+          if (identity) {
+            const changes = [];
+            if (existing.name !== item.name) {
+              changes.push({ field: "name", fieldLabel: "장비명", oldValue: existing.name, newValue: item.name });
+            }
+            if (matchedCat && existing.categoryId !== matchedCat._id) {
+              changes.push({ field: "category", fieldLabel: "카테고리", oldValue: oldCategory?.name, newValue: matchedCat.name });
+            }
+            if (item.totalQuantity !== undefined && existing.totalQuantity !== item.totalQuantity) {
+              changes.push({ field: "totalQuantity", fieldLabel: "전체수량", oldValue: String(existing.totalQuantity), newValue: String(item.totalQuantity) });
+            }
+            if (item.isVisible !== undefined && existing.isVisible !== item.isVisible) {
+              changes.push({ field: "isVisible", fieldLabel: "노출상태", oldValue: existing.isVisible === false ? "숨김" : "노출", newValue: item.isVisible ? "노출" : "숨김" });
+            }
+
+            if (changes.length > 0) {
+              await ctx.scheduler.runAfter(0, internal.changeHistory.recordChange, {
+                userId: identity.subject,
+                userName: identity.name || identity.email || "Unknown",
+                userEmail: identity.email || "",
+                targetType: "equipment",
+                targetId: eqId,
+                targetName: item.name,
+                action: "update",
+                changes,
+                source: "excel_import",
+                sourceDetail: args.fileName,
+                batchId,
+              });
+            }
+          }
+        } else {
+          // 신규: 카테고리 필수
+          let categoryId = matchedCat?._id;
+          if (!categoryId) categoryId = allCategories[0]?._id;
+          if (!categoryId) { errors++; continue; }
+          const newId = await ctx.db.insert("equipment", {
+            name: item.name,
+            categoryId,
+            totalQuantity: item.totalQuantity ?? 1,
+            description: item.description,
+            isVisible: item.isVisible !== false,
+          });
+          created++;
+
+          // 변경 이력 기록
+          if (identity) {
+            await ctx.scheduler.runAfter(0, internal.changeHistory.recordChange, {
+              userId: identity.subject,
+              userName: identity.name || identity.email || "Unknown",
+              userEmail: identity.email || "",
+              targetType: "equipment",
+              targetId: newId,
+              targetName: item.name,
+              action: "create",
+              changes: [
+                { field: "name", fieldLabel: "장비명", newValue: item.name },
+                { field: "category", fieldLabel: "카테고리", newValue: matchedCat?.name || allCategories[0]?.name },
+                { field: "totalQuantity", fieldLabel: "전체수량", newValue: String(item.totalQuantity ?? 1) },
+              ],
+              source: "excel_import",
+              sourceDetail: args.fileName,
+              batchId,
+            });
+          }
+        }
+      } catch {
+        errors++;
+      }
+    }
+    return { created, updated, errors };
+  },
+});
+
 // 4. 카테고리 목록
 export const getCategories = query({
   args: {},
@@ -102,7 +267,8 @@ export const create = mutation({
     isVisible: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("equipment", {
+    const identity = await ctx.auth.getUserIdentity();
+    const equipmentId = await ctx.db.insert("equipment", {
       name: args.name,
       categoryId: args.categoryId,
       totalQuantity: args.totalQuantity,
@@ -112,6 +278,29 @@ export const create = mutation({
       // 기본값은 true(노출)로 설정
       isVisible: args.isVisible ?? true,
     });
+
+    // 변경 이력 기록
+    if (identity) {
+      const category = await ctx.db.get(args.categoryId);
+      await ctx.scheduler.runAfter(0, internal.changeHistory.recordChange, {
+        userId: identity.subject,
+        userName: identity.name || identity.email || "Unknown",
+        userEmail: identity.email || "",
+        targetType: "equipment",
+        targetId: equipmentId,
+        targetName: args.name,
+        action: "create",
+        changes: [
+          { field: "name", fieldLabel: "장비명", newValue: args.name },
+          { field: "category", fieldLabel: "카테고리", newValue: category?.name || "" },
+          { field: "totalQuantity", fieldLabel: "전체수량", newValue: String(args.totalQuantity) },
+          { field: "isVisible", fieldLabel: "노출상태", newValue: (args.isVisible ?? true) ? "노출" : "숨김" },
+        ],
+        source: "manual",
+      });
+    }
+
+    return equipmentId;
   },
 });
 
@@ -130,6 +319,15 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const { id, ...data } = args;
+    const identity = await ctx.auth.getUserIdentity();
+
+    // 이전 데이터 가져오기
+    const oldEquipment = await ctx.db.get(id);
+    if (!oldEquipment) throw new Error("장비를 찾을 수 없습니다.");
+
+    const oldCategory = await ctx.db.get(oldEquipment.categoryId);
+    const newCategory = await ctx.db.get(args.categoryId);
+
     await ctx.db.patch(id, {
       ...data,
       sortOrder: data.sortOrder ?? 999,
@@ -137,6 +335,47 @@ export const update = mutation({
       // 값이 안 넘어오면 기존 값 유지, 아니면 업데이트
       isVisible: data.isVisible ?? true,
     });
+
+    // 변경 이력 기록
+    if (identity) {
+      const changes = [];
+
+      if (oldEquipment.name !== args.name) {
+        changes.push({ field: "name", fieldLabel: "장비명", oldValue: oldEquipment.name, newValue: args.name });
+      }
+      if (oldEquipment.categoryId !== args.categoryId) {
+        changes.push({ field: "category", fieldLabel: "카테고리", oldValue: oldCategory?.name, newValue: newCategory?.name });
+      }
+      if (oldEquipment.totalQuantity !== args.totalQuantity) {
+        changes.push({ field: "totalQuantity", fieldLabel: "전체수량", oldValue: String(oldEquipment.totalQuantity), newValue: String(args.totalQuantity) });
+      }
+      if (oldEquipment.description !== data.description) {
+        changes.push({ field: "description", fieldLabel: "설명", oldValue: oldEquipment.description, newValue: data.description });
+      }
+      if (oldEquipment.isVisible !== (data.isVisible ?? true)) {
+        changes.push({
+          field: "isVisible",
+          fieldLabel: "노출상태",
+          oldValue: oldEquipment.isVisible === false ? "숨김" : "노출",
+          newValue: (data.isVisible ?? true) ? "노출" : "숨김"
+        });
+      }
+
+      if (changes.length > 0) {
+        await ctx.scheduler.runAfter(0, internal.changeHistory.recordChange, {
+          userId: identity.subject,
+          userName: identity.name || identity.email || "Unknown",
+          userEmail: identity.email || "",
+          targetType: "equipment",
+          targetId: id,
+          targetName: args.name,
+          action: "update",
+          changes,
+          source: "manual",
+        });
+      }
+    }
+
     return id;
   },
 });
@@ -145,6 +384,10 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id("equipment") },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    const equipment = await ctx.db.get(args.id);
+    if (!equipment) throw new Error("장비를 찾을 수 없습니다.");
+
     const assets = await ctx.db
       .query("assets")
       .withIndex("by_equipmentId", (q) => q.eq("equipmentId", args.id))
@@ -154,6 +397,24 @@ export const remove = mutation({
       await ctx.db.delete(asset._id);
     }
     await ctx.db.delete(args.id);
+
+    // 변경 이력 기록
+    if (identity) {
+      await ctx.scheduler.runAfter(0, internal.changeHistory.recordChange, {
+        userId: identity.subject,
+        userName: identity.name || identity.email || "Unknown",
+        userEmail: identity.email || "",
+        targetType: "equipment",
+        targetId: args.id,
+        targetName: equipment.name,
+        action: "delete",
+        changes: [
+          { field: "deleted", fieldLabel: "삭제됨", newValue: "장비 및 관련 자산 삭제됨" }
+        ],
+        source: "manual",
+      });
+    }
+
     return args.id;
   },
 });
@@ -183,7 +444,31 @@ export const toggleVisibility = mutation({
     isVisible: v.boolean(), // 변경할 타겟 상태
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    const equipment = await ctx.db.get(args.id);
+    if (!equipment) throw new Error("장비를 찾을 수 없습니다.");
+
+    const oldValue = equipment.isVisible === false ? "숨김" : "노출";
+    const newValue = args.isVisible ? "노출" : "숨김";
+
     await ctx.db.patch(args.id, { isVisible: args.isVisible });
+
+    // 변경 이력 기록
+    if (identity && oldValue !== newValue) {
+      await ctx.scheduler.runAfter(0, internal.changeHistory.recordChange, {
+        userId: identity.subject,
+        userName: identity.name || identity.email || "Unknown",
+        userEmail: identity.email || "",
+        targetType: "equipment",
+        targetId: args.id,
+        targetName: equipment.name,
+        action: "status_change",
+        changes: [
+          { field: "isVisible", fieldLabel: "노출상태", oldValue, newValue }
+        ],
+        source: "manual",
+      });
+    }
   },
 });
 

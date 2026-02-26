@@ -47,26 +47,34 @@ export const checkAvailability = query({
           )
           .collect();
 
+        // 배정 불가 상태 목록 (상태 필드 기준)
+        const UNAVAILABLE_STATUSES = [
+          "maintenance",
+          "broken",
+          "lost",
+          "repair",
+          "retired",
+        ];
+
         // [상세 카운팅 로직]
         const totalCount = allAssets.length;
 
-        // 고장/수리중/분실 등 대여 불가 상태인 장비 수
+        // 상태 불량으로 대여 불가인 장비 수
         const brokenCount = allAssets.filter((a) =>
-          ["maintenance", "broken", "lost"].includes(a.status),
+          UNAVAILABLE_STATUSES.includes(a.status),
         ).length;
 
-        // (고장나지 않았는데) 다른 예약이 선점하고 있는 장비 수
+        // 상태는 정상이지만 다른 예약이 선점하고 있는 장비 수
         const rentedCount = allAssets.filter(
           (a) =>
-            !["maintenance", "broken", "lost"].includes(a.status) &&
+            !UNAVAILABLE_STATUSES.includes(a.status) &&
             occupiedAssetIds.has(a._id),
         ).length;
 
-        // 실제 가용 수량 = 전체 - (고장+분실) - (다른예약선점)
-        // (단, 'rented' 상태라도 기간이 겹치지 않으면 가용하므로 occupiedAssetIds로만 체크)
+        // 실제 가용 수량 = 상태 정상 + 다른 예약 미선점
         const availableCount = allAssets.filter(
           (a) =>
-            !["maintenance", "broken", "lost"].includes(a.status) &&
+            !UNAVAILABLE_STATUSES.includes(a.status) &&
             !occupiedAssetIds.has(a._id),
         ).length;
 
@@ -215,12 +223,18 @@ export const updateReservationStatus = mutation({
             }
           });
 
+          const UNAVAILABLE_STATUSES = [
+            "maintenance",
+            "broken",
+            "lost",
+            "repair",
+            "retired",
+          ];
+
           const availableAssets = sortedAssets.filter(
             (asset) =>
               !occupiedAssetIds.has(asset._id) &&
-              asset.status !== "maintenance" &&
-              asset.status !== "broken" &&
-              asset.status !== "lost",
+              !UNAVAILABLE_STATUSES.includes(asset.status),
           );
 
           if (availableAssets.length < item.quantity) {
@@ -241,6 +255,64 @@ export const updateReservationStatus = mutation({
       );
 
       await ctx.db.patch(id, { status: "approved", items: newItems });
+      return;
+    }
+
+    // [반출 처리] rented 상태로 변경 전 재고 검증 (approved 케이스와 동일 로직)
+    if (status === "rented") {
+      const allReservations = await ctx.db.query("reservations").collect();
+
+      // 기간이 겹치는 활성 예약에서 점유 중인 asset ID 수집
+      const overlappingReservations = allReservations.filter((r) => {
+        const isActive = r.status === "approved" || r.status === "rented";
+        return (
+          isActive &&
+          r._id !== id &&
+          r.startDate < reservation.endDate &&
+          r.endDate > reservation.startDate
+        );
+      });
+
+      const occupiedAssetIds = new Set<string>();
+      overlappingReservations.forEach((r) => {
+        r.items.forEach((item) => {
+          item.assignedAssets?.forEach((assetId) =>
+            occupiedAssetIds.add(assetId),
+          );
+        });
+      });
+
+      const UNAVAILABLE_STATUSES = [
+        "maintenance",
+        "broken",
+        "lost",
+        "repair",
+        "retired",
+      ];
+
+      // 각 장비 item에 대해 가용 재고 체크
+      for (const item of reservation.items) {
+        const allAssets = await ctx.db
+          .query("assets")
+          .withIndex("by_equipmentId", (q) =>
+            q.eq("equipmentId", item.equipmentId),
+          )
+          .collect();
+
+        const availableCount = allAssets.filter(
+          (a) =>
+            !UNAVAILABLE_STATUSES.includes(a.status) &&
+            !occupiedAssetIds.has(a._id),
+        ).length;
+
+        if (availableCount < item.quantity) {
+          throw new Error(
+            `[재고 부족] '${item.name}' 장비가 해당 기간에 부족합니다. 반출 처리할 수 없습니다.`,
+          );
+        }
+      }
+
+      await ctx.db.patch(id, { status: "rented" });
       return;
     }
 
@@ -455,6 +527,37 @@ export const updateRepairMemo = mutation({
 export const updateReservationItems = mutation({
   args: { id: v.id("reservations"), items: v.array(v.any()) },
   handler: async (ctx, args) => {
+    const reservation = await ctx.db.get(args.id);
+    if (!reservation) throw new Error("Reservation not found");
+
+    // 날짜가 겹치는 다른 활성 예약에서 장비별 신청 수량 집계
+    const allReservations = await ctx.db.query("reservations").collect();
+    const occupiedQuantity: Record<string, number> = {};
+    allReservations.forEach((r) => {
+      const isActive = r.status === "approved" || r.status === "rented";
+      if (!isActive || r._id === args.id) return;
+      const overlaps =
+        r.startDate < reservation.endDate && r.endDate > reservation.startDate;
+      if (!overlaps) return;
+      r.items.forEach((item) => {
+        const eqId = item.equipmentId as string;
+        occupiedQuantity[eqId] = (occupiedQuantity[eqId] || 0) + item.quantity;
+      });
+    });
+
+    // 각 장비별 가용 수량 검증
+    for (const item of args.items) {
+      const equipment = await ctx.db.get(item.equipmentId);
+      if (!equipment) continue;
+      const occupied = occupiedQuantity[item.equipmentId as string] || 0;
+      const available = (equipment as { totalQuantity: number }).totalQuantity - occupied;
+      if (item.quantity > available) {
+        throw new Error(
+          `'${item.name || (equipment as { name: string }).name}' 장비의 신청 수량(${item.quantity}개)이 해당 날짜의 가용 재고(${available}개)를 초과합니다.`,
+        );
+      }
+    }
+
     await ctx.db.patch(args.id, { items: args.items });
   },
 });

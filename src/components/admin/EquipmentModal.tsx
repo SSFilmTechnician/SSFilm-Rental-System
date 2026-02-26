@@ -23,7 +23,7 @@ export default function EquipmentModal({ isOpen, onClose, editingId }: Props) {
   // ★ [수정] 대분류와 최종 카테고리 ID를 분리해서 관리
   const [parentCategoryId, setParentCategoryId] = useState<string>("");
   const [categoryId, setCategoryId] = useState<string>("");
-  const [totalQuantity, setTotalQuantity] = useState(1);
+  const [totalQuantity, setTotalQuantity] = useState<string>("1");
   const [description, setDescription] = useState("");
   const [sortOrder, setSortOrder] = useState(999);
   const [isGroupPrint, setIsGroupPrint] = useState(false);
@@ -42,7 +42,7 @@ export default function EquipmentModal({ isOpen, onClose, editingId }: Props) {
   useEffect(() => {
     if (editingId && equipment && categories) {
       setName(equipment.name);
-      setTotalQuantity(equipment.totalQuantity);
+      setTotalQuantity(String(equipment.totalQuantity));
       setDescription(equipment.description || "");
       setSortOrder(equipment.sortOrder || 999);
       setIsGroupPrint(equipment.isGroupPrint || false);
@@ -65,7 +65,7 @@ export default function EquipmentModal({ isOpen, onClose, editingId }: Props) {
       setName("");
       setParentCategoryId("");
       setCategoryId("");
-      setTotalQuantity(1);
+      setTotalQuantity("1");
       setDescription("");
       setSortOrder(999);
       setIsGroupPrint(false);
@@ -100,12 +100,13 @@ export default function EquipmentModal({ isOpen, onClose, editingId }: Props) {
     }
 
     try {
+      const parsedQuantity = Math.max(1, parseInt(totalQuantity) || 1);
       if (editingId) {
         await updateEquipment({
           id: editingId,
           name: name.trim(),
           categoryId: categoryId as Id<"categories">,
-          totalQuantity,
+          totalQuantity: parsedQuantity,
           description: description.trim() || undefined,
           sortOrder,
           isGroupPrint,
@@ -115,7 +116,7 @@ export default function EquipmentModal({ isOpen, onClose, editingId }: Props) {
         await createEquipment({
           name: name.trim(),
           categoryId: categoryId as Id<"categories">,
-          totalQuantity,
+          totalQuantity: parsedQuantity,
           description: description.trim() || undefined,
           sortOrder,
           isGroupPrint,
@@ -197,7 +198,11 @@ export default function EquipmentModal({ isOpen, onClose, editingId }: Props) {
               type="number"
               min={1}
               value={totalQuantity}
-              onChange={(e) => setTotalQuantity(parseInt(e.target.value) || 1)}
+              onChange={(e) => setTotalQuantity(e.target.value)}
+              onBlur={(e) => {
+                const n = parseInt(e.target.value);
+                setTotalQuantity(String(isNaN(n) || n < 1 ? 1 : n));
+              }}
               className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black"
             />
           </div>

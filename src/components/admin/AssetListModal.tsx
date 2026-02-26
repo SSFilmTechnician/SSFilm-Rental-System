@@ -303,7 +303,7 @@ export default function AssetListModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-3xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[65vh]">
+      <div className="bg-white w-full max-w-3xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* 1. Header */}
         <div className="p-4 border-b bg-gray-50 flex justify-between items-center flex-shrink-0">
           <div className="flex-1">

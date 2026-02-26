@@ -1,38 +1,36 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useConvexAuth } from "convex/react";
-import { ArrowLeft, ShoppingCart } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Info, CalendarDays } from "lucide-react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-// 경로가 맞는지 확인 필요 (보통 ../../stores/useCartStore 일 수도 있음)
 import { useCartStore } from "@/stores/useCartStore";
+import EquipmentAvailabilityCalendar from "@/components/equipment/EquipmentAvailabilityCalendar";
+
+type Tab = "info" | "inventory";
 
 export default function EquipmentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [quantity, setQuantity] = useState(1);
+  const [activeTab, setActiveTab] = useState<Tab>("info");
   const { isAuthenticated } = useConvexAuth();
   const addItem = useCartStore((state) => state.addItem);
 
-  // 1. Convex로 장비 데이터 불러오기
   const equipment = useQuery(
     api.equipment.getById,
     id ? { id: id as Id<"equipment"> } : "skip"
   );
 
-  // 2. 장바구니 담기 핸들러
   const handleAddToCart = () => {
     if (!equipment) return;
-
     addItem({
       equipmentId: equipment._id,
       name: equipment.name,
-      // ✅ 수정: DB에 없는 .category 대신 백엔드가 만들어준 .categoryName 사용
       category: equipment.categoryName,
       quantity: quantity,
       imageUrl: equipment.imageUrl,
     });
-
     alert("장바구니에 담았습니다.");
   };
 
@@ -69,40 +67,89 @@ export default function EquipmentDetail() {
             )}
 
             <div className="absolute top-4 left-4 bg-gray-100 text-gray-600 text-xs font-bold px-2 py-1 rounded">
-              {/* ✅ 수정: category -> categoryName */}
               {equipment.categoryName}
             </div>
           </div>
         </div>
 
         {/* 오른쪽: 상세 정보 및 조작 */}
-        <div className="w-full md:w-1/2 space-y-6">
+        <div className="w-full md:w-1/2 space-y-5">
+          {/* 장비 기본 정보 */}
           <div>
             <span className="inline-block bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full mb-3">
-              {/* ✅ 수정: category -> categoryName */}
               {equipment.categoryName}
             </span>
             <h1 className="text-4xl font-bold text-gray-900 mb-2">
               {equipment.name}
             </h1>
-            {equipment.description && (
-              <p className="text-gray-500 text-lg leading-relaxed">
-                {equipment.description}
-              </p>
-            )}
-
             {equipment.manufacturer && (
-              <p className="text-sm text-gray-400 mt-2">
+              <p className="text-sm text-gray-400">
                 제조사: {equipment.manufacturer}
               </p>
             )}
           </div>
 
-          {/* 로그인한 경우에만 장바구니 담기 섹션 표시 */}
+          {/* 탭 UI */}
+          <div className="border-b border-gray-200">
+            <div className="flex gap-0">
+              {[
+                { key: "info" as Tab, label: "장비 정보", icon: Info },
+                {
+                  key: "inventory" as Tab,
+                  label: "재고 현황",
+                  icon: CalendarDays,
+                },
+              ].map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  onClick={() => setActiveTab(key)}
+                  className={[
+                    "flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold transition-all border-b-2 -mb-px",
+                    activeTab === key
+                      ? "border-gray-900 text-gray-900"
+                      : "border-transparent text-gray-400 hover:text-gray-600",
+                  ].join(" ")}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 탭 콘텐츠 */}
+          <div className="min-h-[180px]">
+            {activeTab === "info" && (
+              <div className="animate-fadeIn">
+                {equipment.description ? (
+                  <p className="text-gray-500 text-base leading-relaxed">
+                    {equipment.description}
+                  </p>
+                ) : (
+                  <p className="text-gray-300 text-sm italic">
+                    상세 설명이 없습니다.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {activeTab === "inventory" && (
+              <div className="animate-fadeIn">
+                <EquipmentAvailabilityCalendar
+                  equipmentId={equipment._id}
+                  compact
+                />
+              </div>
+            )}
+          </div>
+
+          {/* 장바구니 담기 (로그인 시에만) */}
           {isAuthenticated && (
-            <div className="border-t border-gray-200 pt-6">
-              <div className="flex items-center justify-between mb-6">
-                <span className="text-lg font-bold text-gray-700">대여 수량</span>
+            <div className="border-t border-gray-200 pt-5">
+              <div className="flex items-center justify-between mb-5">
+                <span className="text-lg font-bold text-gray-700">
+                  대여 수량
+                </span>
 
                 <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
                   <button

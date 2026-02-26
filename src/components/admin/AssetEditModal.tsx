@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { X, Check, Package, AlertCircle, RefreshCw } from "lucide-react";
+import { X, Check, AlertCircle, RefreshCw } from "lucide-react";
 
 interface ReservationItem {
   equipmentId: Id<"equipment">;
@@ -52,6 +52,11 @@ export default function AssetEditModal({
   // 모든 개별 장비 데이터 가져오기
   const allAssets = useQuery(api.assets.getAll);
 
+  // 다른 활성 예약(approved/rented)에 이미 배정된 asset ID 목록 (실시간)
+  const occupiedAssetIds = useQuery(api.assets.getOccupiedAssetIds, {
+    excludeReservationId: reservationId,
+  });
+
   // 모달이 열릴 때 기존 배정 정보로 초기화
   useEffect(() => {
     if (isOpen && items) {
@@ -66,17 +71,23 @@ export default function AssetEditModal({
 
   if (!isOpen) return null;
 
-  // 장비별로 선택 가능한 개별 장비 필터링 (사용 가능 + 현재 이 예약에 배정된 것)
+  // 장비별로 선택 가능한 개별 장비 필터링
+  // - repair/retired 상태 제외
+  // - 다른 활성 예약에 배정된 장비 제외
+  // - 단, 현재 이 예약에 배정된 장비는 선택 가능하도록 포함
   const getSelectableAssets = (equipmentId: Id<"equipment">): AssetData[] => {
     if (!allAssets) return [];
 
     const currentAssigned = originalSelections[equipmentId] || [];
+    const occupiedSet = new Set(occupiedAssetIds || []);
 
     return allAssets
       .filter(
         (a) =>
           a.equipmentId === equipmentId &&
-          (a.status === "available" || currentAssigned.includes(a._id)),
+          a.status !== "repair" &&
+          a.status !== "retired" &&
+          (!occupiedSet.has(a._id) || currentAssigned.includes(a._id)),
       )
       .sort((a, b) => {
         const aNum = parseInt(a.serialNumber || "");
@@ -88,29 +99,27 @@ export default function AssetEditModal({
 
   // 개별 장비 선택/해제 토글
   const toggleAsset = (equipmentId: Id<"equipment">, assetId: Id<"assets">) => {
-    setSelections((prev) => {
-      const current = prev[equipmentId] || [];
-      const item = items.find((i) => i.equipmentId === equipmentId);
-      const maxQuantity = item?.quantity || 1;
+    const current = selections[equipmentId] || [];
+    const item = items.find((i) => i.equipmentId === equipmentId);
+    const maxQuantity = item?.quantity || 1;
 
-      if (current.includes(assetId)) {
-        // 이미 선택된 경우 해제
-        return {
-          ...prev,
-          [equipmentId]: current.filter((id) => id !== assetId),
-        };
-      } else {
-        // 선택 (최대 수량 체크)
-        if (current.length >= maxQuantity) {
-          alert(`이 장비는 최대 ${maxQuantity}개까지만 선택할 수 있습니다.`);
-          return prev;
-        }
-        return {
-          ...prev,
-          [equipmentId]: [...current, assetId],
-        };
+    if (current.includes(assetId)) {
+      // 이미 선택된 경우 해제
+      setSelections((prev) => ({
+        ...prev,
+        [equipmentId]: current.filter((id) => id !== assetId),
+      }));
+    } else {
+      // 선택 (최대 수량 체크)
+      if (current.length >= maxQuantity) {
+        alert(`이 장비는 최대 ${maxQuantity}개까지만 선택할 수 있습니다.`);
+        return;
       }
-    });
+      setSelections((prev) => ({
+        ...prev,
+        [equipmentId]: [...current, assetId],
+      }));
+    }
   };
 
   // 변경사항이 있는지 확인

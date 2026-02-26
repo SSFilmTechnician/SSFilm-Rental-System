@@ -30,6 +30,11 @@ interface AssetData {
   note?: string;
 }
 
+type AssetDisplayState =
+  | "selectable"      // 선택 가능 (available)
+  | "occupied"        // 다른 활성 예약에 배정됨 (approved/rented)
+  | "unavailable";    // repair/maintenance/broken/lost/retired
+
 export default function AssetAssignmentModal({
   isOpen,
   onClose,
@@ -47,6 +52,11 @@ export default function AssetAssignmentModal({
   // 모든 개별 장비 데이터 가져오기
   const allAssets = useQuery(api.assets.getAll);
 
+  // 다른 활성 예약에 배정된 asset 상세 정보 (실시간)
+  const occupiedAssetsWithInfo = useQuery(api.assets.getOccupiedAssetsWithInfo, {
+    excludeReservationId: reservationId,
+  });
+
   // 모달이 열릴 때 기존 배정 정보로 초기화
   useEffect(() => {
     if (isOpen && items) {
@@ -60,20 +70,30 @@ export default function AssetAssignmentModal({
 
   if (!isOpen) return null;
 
-  // 장비별로 사용 가능한 개별 장비 필터링 (현재 예약에 배정된 장비도 포함)
-  const getAvailableAssets = (equipmentId: Id<"equipment">): AssetData[] => {
+  // asset의 표시 상태 판단
+  const getAssetDisplayState = (asset: AssetData): AssetDisplayState => {
+    // 수리/고장/분실/폐기 상태
+    if (
+      asset.status === "repair" ||
+      asset.status === "maintenance" ||
+      asset.status === "broken" ||
+      asset.status === "lost" ||
+      asset.status === "retired"
+    ) {
+      return "unavailable";
+    }
+    // 다른 예약에 배정됨
+    if (occupiedAssetsWithInfo && occupiedAssetsWithInfo[asset._id]) {
+      return "occupied";
+    }
+    return "selectable";
+  };
+
+  // 장비별로 모든 개별 장비 반환 (필터링 없이 모두 표시)
+  const getAllAssetsForEquipment = (equipmentId: Id<"equipment">): AssetData[] => {
     if (!allAssets) return [];
-
-    // 현재 이 예약에 자동 배정된 장비 ID
-    const currentAssigned =
-      items.find((i) => i.equipmentId === equipmentId)?.assignedAssets || [];
-
     return allAssets
-      .filter(
-        (a) =>
-          a.equipmentId === equipmentId &&
-          (a.status === "available" || currentAssigned.includes(a._id)),
-      )
+      .filter((a) => a.equipmentId === equipmentId)
       .sort((a, b) => {
         const aNum = parseInt(a.serialNumber || "");
         const bNum = parseInt(b.serialNumber || "");
@@ -84,34 +104,29 @@ export default function AssetAssignmentModal({
 
   // 개별 장비 선택/해제 토글
   const toggleAsset = (equipmentId: Id<"equipment">, assetId: Id<"assets">) => {
-    setSelections((prev) => {
-      const current = prev[equipmentId] || [];
-      const item = items.find((i) => i.equipmentId === equipmentId);
-      const maxQuantity = item?.quantity || 1;
+    const current = selections[equipmentId] || [];
+    const item = items.find((i) => i.equipmentId === equipmentId);
+    const maxQuantity = item?.quantity || 1;
 
-      if (current.includes(assetId)) {
-        // 이미 선택된 경우 해제
-        return {
-          ...prev,
-          [equipmentId]: current.filter((id) => id !== assetId),
-        };
-      } else {
-        // 선택 (최대 수량 체크)
-        if (current.length >= maxQuantity) {
-          alert(`이 장비는 최대 ${maxQuantity}개까지만 선택할 수 있습니다.`);
-          return prev;
-        }
-        return {
-          ...prev,
-          [equipmentId]: [...current, assetId],
-        };
+    if (current.includes(assetId)) {
+      setSelections((prev) => ({
+        ...prev,
+        [equipmentId]: current.filter((id) => id !== assetId),
+      }));
+    } else {
+      if (current.length >= maxQuantity) {
+        alert(`이 장비는 최대 ${maxQuantity}개까지만 선택할 수 있습니다.`);
+        return;
       }
-    });
+      setSelections((prev) => ({
+        ...prev,
+        [equipmentId]: [...current, assetId],
+      }));
+    }
   };
 
   // 배정 완료 처리
   const handleAssign = async () => {
-    // 모든 장비에 대해 필요한 수량만큼 선택되었는지 확인
     const incomplete = items.filter((item) => {
       const selected = selections[item.equipmentId] || [];
       return selected.length < item.quantity;
@@ -150,6 +165,46 @@ export default function AssetAssignmentModal({
     }
   };
 
+  // 상태별 버튼 스타일
+  const getAssetButtonStyle = (
+    _asset: AssetData,
+    isSelected: boolean,
+    displayState: AssetDisplayState,
+  ): string => {
+    if (displayState === "unavailable") {
+      return "px-3 py-2 rounded-lg border text-sm font-mono cursor-not-allowed opacity-60 bg-red-50 text-red-400 border-red-200";
+    }
+    if (displayState === "occupied") {
+      return "px-3 py-2 rounded-lg border text-sm font-mono cursor-not-allowed bg-gray-100 text-gray-400 border-gray-200";
+    }
+    if (isSelected) {
+      return "px-3 py-2 rounded-lg border text-sm font-mono transition-all bg-black text-white border-black hover:bg-gray-800";
+    }
+    return "px-3 py-2 rounded-lg border text-sm font-mono transition-all bg-white text-gray-700 border-gray-300 hover:border-gray-500 hover:bg-gray-50";
+  };
+
+  // 상태 레이블 텍스트
+  const getStatusLabel = (asset: AssetData, displayState: AssetDisplayState): string => {
+    if (displayState === "unavailable") {
+      const labels: Record<string, string> = {
+        repair: "수리중",
+        maintenance: "점검중",
+        broken: "파손",
+        lost: "분실",
+        retired: "폐기",
+      };
+      return labels[asset.status] || asset.status;
+    }
+    if (displayState === "occupied" && occupiedAssetsWithInfo) {
+      const info = occupiedAssetsWithInfo[asset._id];
+      if (info) {
+        const statusLabel = info.reservationStatus === "rented" ? "대여중" : "예약중";
+        return `${statusLabel} · ${info.startDate}~${info.endDate} · ${info.leaderName}`;
+      }
+    }
+    return "";
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
@@ -168,11 +223,30 @@ export default function AssetAssignmentModal({
           </button>
         </div>
 
+        {/* 범례 */}
+        <div className="px-4 pt-3 pb-1 flex flex-wrap gap-3 text-xs text-gray-600">
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-3 h-3 rounded bg-black"></span> 선택됨
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-3 h-3 rounded border border-gray-300 bg-white"></span> 선택 가능
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-3 h-3 rounded bg-gray-200"></span> 예약중/대여중
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-3 h-3 rounded bg-red-100 border border-red-200"></span> 수리/파손/폐기
+          </span>
+        </div>
+
         {/* 본문 */}
         <div className="p-4 overflow-y-auto flex-1 space-y-6">
           {items.map((item) => {
-            const availableAssets = getAvailableAssets(item.equipmentId);
+            const allItemAssets = getAllAssetsForEquipment(item.equipmentId);
             const selected = selections[item.equipmentId] || [];
+            const selectableCount = allItemAssets.filter(
+              (a) => getAssetDisplayState(a) === "selectable",
+            ).length;
 
             return (
               <div key={item.equipmentId} className="border rounded-lg p-4">
@@ -199,29 +273,50 @@ export default function AssetAssignmentModal({
                   )}
                 </div>
 
-                {availableAssets.length === 0 ? (
+                {allItemAssets.length === 0 ? (
                   <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm text-yellow-800 flex items-center gap-2">
                     <AlertCircle className="w-4 h-4" />
-                    등록된 개별 장비가 없거나 모두 대여 중입니다.
+                    등록된 개별 장비가 없습니다.
                   </div>
                 ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {availableAssets.map((asset) => (
-                      <button
-                        key={asset._id}
-                        onClick={() => toggleAsset(item.equipmentId, asset._id)}
-                        className={`px-3 py-2 rounded-lg border text-sm font-mono transition-all ${
-                          selected.includes(asset._id)
-                            ? "bg-black text-white border-black"
-                            : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
-                        }`}
-                      >
-                        {asset.managementCode ||
-                          asset.serialNumber ||
-                          "번호없음"}
-                      </button>
-                    ))}
-                  </div>
+                  <>
+                    {selectableCount === 0 && (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm text-yellow-800 flex items-center gap-2 mb-2">
+                        <AlertCircle className="w-4 h-4" />
+                        배정 가능한 장비가 없습니다. 모두 대여 중이거나 수리 중입니다.
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      {allItemAssets.map((asset) => {
+                        const displayState = getAssetDisplayState(asset);
+                        const isSelected = selected.includes(asset._id);
+                        const isDisabled = displayState !== "selectable";
+                        const statusLabel = getStatusLabel(asset, displayState);
+                        const displayCode =
+                          asset.managementCode || asset.serialNumber || "번호없음";
+
+                        return (
+                          <div key={asset._id} className="flex flex-col items-center gap-0.5">
+                            <button
+                              onClick={() =>
+                                !isDisabled && toggleAsset(item.equipmentId, asset._id)
+                              }
+                              disabled={isDisabled}
+                              title={statusLabel || displayCode}
+                              className={getAssetButtonStyle(asset, isSelected, displayState)}
+                            >
+                              {displayCode}
+                            </button>
+                            {statusLabel && (
+                              <span className="text-xs text-gray-400 max-w-[120px] text-center leading-tight">
+                                {statusLabel}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
                 )}
               </div>
             );

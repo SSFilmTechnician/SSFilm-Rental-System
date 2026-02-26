@@ -1,5 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 
 // ===========================
 // 1. 개별 장비(Asset) 조회
@@ -46,6 +48,125 @@ export const getAvailableByEquipmentId = query({
         if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
         return (a.serialNumber || "").localeCompare(b.serialNumber || "");
       });
+  },
+});
+
+// 현재 활성 예약에 배정된 asset 상세 정보 조회 (UI 상태 표시용)
+// { assetId → { leaderName, startDate, endDate, reservationStatus } }
+// 날짜가 겹치는 예약에 배정된 장비만 "점유"로 처리
+export const getOccupiedAssetsWithInfo = query({
+  args: { excludeReservationId: v.optional(v.id("reservations")) },
+  handler: async (ctx, args) => {
+    const reservations = await ctx.db.query("reservations").collect();
+
+    // 현재 예약의 날짜 범위 조회 (날짜 겹침 필터링용)
+    let currentStartDate: string | null = null;
+    let currentEndDate: string | null = null;
+    if (args.excludeReservationId) {
+      const currentReservation = reservations.find(
+        (r) => r._id === args.excludeReservationId,
+      );
+      currentStartDate = currentReservation?.startDate ?? null;
+      currentEndDate = currentReservation?.endDate ?? null;
+    }
+
+    const occupiedMap: Record<
+      string,
+      {
+        leaderName: string;
+        startDate: string;
+        endDate: string;
+        reservationStatus: string;
+      }
+    > = {};
+
+    for (const reservation of reservations) {
+      if (
+        reservation.status !== "approved" &&
+        reservation.status !== "rented"
+      )
+        continue;
+      if (
+        args.excludeReservationId &&
+        reservation._id === args.excludeReservationId
+      )
+        continue;
+
+      // 날짜 겹침 체크: 현재 예약과 날짜가 겹치는 경우만 점유로 처리
+      if (currentStartDate && currentEndDate) {
+        const overlaps =
+          reservation.startDate < currentEndDate &&
+          reservation.endDate > currentStartDate;
+        if (!overlaps) continue;
+      }
+
+      for (const item of reservation.items) {
+        if (item.assignedAssets) {
+          item.assignedAssets.forEach((id) => {
+            occupiedMap[id] = {
+              leaderName: reservation.leaderName,
+              startDate: reservation.startDate,
+              endDate: reservation.endDate,
+              reservationStatus: reservation.status,
+            };
+          });
+        }
+      }
+    }
+
+    return occupiedMap;
+  },
+});
+
+// 현재 활성 예약(approved/rented)에 배정된 asset ID 목록 조회 (실시간)
+// excludeReservationId: 자기 자신 예약은 제외 (편집 시 본인 배정 장비는 선택 가능하도록)
+// 날짜가 겹치는 예약에 배정된 장비만 점유로 처리
+export const getOccupiedAssetIds = query({
+  args: { excludeReservationId: v.optional(v.id("reservations")) },
+  handler: async (ctx, args) => {
+    const reservations = await ctx.db.query("reservations").collect();
+
+    // 현재 예약의 날짜 범위 조회 (날짜 겹침 필터링용)
+    let currentStartDate: string | null = null;
+    let currentEndDate: string | null = null;
+    if (args.excludeReservationId) {
+      const currentReservation = reservations.find(
+        (r) => r._id === args.excludeReservationId,
+      );
+      currentStartDate = currentReservation?.startDate ?? null;
+      currentEndDate = currentReservation?.endDate ?? null;
+    }
+
+    const occupied = new Set<string>();
+
+    for (const reservation of reservations) {
+      if (
+        reservation.status !== "approved" &&
+        reservation.status !== "rented"
+      )
+        continue;
+      if (
+        args.excludeReservationId &&
+        reservation._id === args.excludeReservationId
+      )
+        continue;
+
+      // 날짜 겹침 체크: 현재 예약과 날짜가 겹치는 경우만 점유로 처리
+      if (currentStartDate && currentEndDate) {
+        const overlaps =
+          reservation.startDate < currentEndDate &&
+          reservation.endDate > currentStartDate;
+        if (!overlaps) continue;
+      }
+
+      for (const item of reservation.items) {
+        if (item.assignedAssets) {
+          item.assignedAssets.forEach((id) => occupied.add(id));
+        }
+      }
+    }
+
+    return Array.from(occupied);
   },
 });
 
@@ -98,6 +219,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
+    const identity = await ctx.auth.getUserIdentity();
 
     // 검색/표시 성능을 위해 장비명과 카테고리명을 Asset에 복사(Denormalization)
     const equipment = await ctx.db.get(args.equipmentId);
@@ -109,7 +231,7 @@ export const create = mutation({
       categoryName = category?.name || "Unknown";
     }
 
-    return await ctx.db.insert("assets", {
+    const assetId = await ctx.db.insert("assets", {
       equipmentId: args.equipmentId,
       equipmentName,
       categoryName,
@@ -120,6 +242,27 @@ export const create = mutation({
       createdAt: now,
       updatedAt: now,
     });
+
+    // 변경 이력 기록
+    if (identity) {
+      await ctx.scheduler.runAfter(0, internal.changeHistory.recordChange, {
+        userId: identity.subject,
+        userName: identity.name || identity.email || "Unknown",
+        userEmail: identity.email || "",
+        targetType: "asset",
+        targetId: assetId,
+        targetName: `${equipmentName} - ${args.serialNumber.trim()}`,
+        action: "create",
+        changes: [
+          { field: "equipmentName", fieldLabel: "장비명", newValue: equipmentName },
+          { field: "serialNumber", fieldLabel: "시리얼번호", newValue: args.serialNumber.trim() },
+          { field: "status", fieldLabel: "상태", newValue: args.status || "available" },
+        ],
+        source: "manual",
+      });
+    }
+
+    return assetId;
   },
 });
 
@@ -171,6 +314,7 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const { id, ...updates } = args;
+    const identity = await ctx.auth.getUserIdentity();
 
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Asset not found");
@@ -181,6 +325,38 @@ export const update = mutation({
       updatedAt: Date.now(),
     });
 
+    // 변경 이력 기록
+    if (identity) {
+      const changes = [];
+
+      if (args.serialNumber !== undefined && existing.serialNumber !== args.serialNumber) {
+        changes.push({ field: "serialNumber", fieldLabel: "시리얼번호", oldValue: existing.serialNumber, newValue: args.serialNumber });
+      }
+      if (args.managementCode !== undefined && existing.managementCode !== args.managementCode) {
+        changes.push({ field: "managementCode", fieldLabel: "자산번호", oldValue: existing.managementCode, newValue: args.managementCode });
+      }
+      if (args.status !== undefined && existing.status !== args.status) {
+        changes.push({ field: "status", fieldLabel: "상태", oldValue: existing.status, newValue: args.status });
+      }
+      if (args.note !== undefined && existing.note !== args.note) {
+        changes.push({ field: "note", fieldLabel: "비고", oldValue: existing.note, newValue: args.note });
+      }
+
+      if (changes.length > 0) {
+        await ctx.scheduler.runAfter(0, internal.changeHistory.recordChange, {
+          userId: identity.subject,
+          userName: identity.name || identity.email || "Unknown",
+          userEmail: identity.email || "",
+          targetType: "asset",
+          targetId: id,
+          targetName: `${existing.equipmentName} - ${existing.serialNumber}`,
+          action: "update",
+          changes,
+          source: "manual",
+        });
+      }
+    }
+
     return id;
   },
 });
@@ -189,8 +365,29 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id("assets") },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    const asset = await ctx.db.get(args.id);
+
     // 필요하다면 여기서 관련 이력(History)도 삭제하거나 보관할 수 있음
     await ctx.db.delete(args.id);
+
+    // 변경 이력 기록
+    if (identity && asset) {
+      await ctx.scheduler.runAfter(0, internal.changeHistory.recordChange, {
+        userId: identity.subject,
+        userName: identity.name || identity.email || "Unknown",
+        userEmail: identity.email || "",
+        targetType: "asset",
+        targetId: args.id,
+        targetName: `${asset.equipmentName} - ${asset.serialNumber}`,
+        action: "delete",
+        changes: [
+          { field: "deleted", fieldLabel: "삭제됨", newValue: "자산 삭제됨" }
+        ],
+        source: "manual",
+      });
+    }
+
     return args.id;
   },
 });
@@ -218,15 +415,47 @@ export const assignToReservation = mutation({
     const user = await ctx.db.get(reservation.userId);
     const userName = user?.name || "Unknown";
 
+    // 배정 전 날짜가 겹치는 다른 활성 예약에서 점유 중인 asset ID 수집
+    const allReservations = await ctx.db.query("reservations").collect();
+    const occupiedByOthers = new Set<string>();
+    allReservations.forEach((r) => {
+      const isActive = r.status === "approved" || r.status === "rented";
+      if (!isActive || r._id === args.reservationId) return;
+      // 날짜 겹침 체크: 현재 예약과 날짜가 겹치는 예약만 충돌로 처리
+      const overlaps =
+        r.startDate < reservation.endDate &&
+        r.endDate > reservation.startDate;
+      if (!overlaps) return;
+      r.items.forEach((item) => {
+        item.assignedAssets?.forEach((id) => occupiedByOthers.add(id));
+      });
+    });
+
+    // 배정 불가 상태 목록
+    const UNAVAILABLE_STATUSES = [
+      "maintenance",
+      "broken",
+      "lost",
+      "repair",
+      "retired",
+    ];
+
     // 1. 선택된 자산들의 상태를 'rented'로 변경하고 이력 기록
     for (const assignment of args.assignments) {
       for (const assetId of assignment.assetIds) {
         const asset = await ctx.db.get(assetId);
 
-        // [중복 배정 방지] 이미 사용 중인지 체크
-        if (!asset || asset.status !== "available") {
+        // 상태 불량 체크
+        if (!asset || UNAVAILABLE_STATUSES.includes(asset.status)) {
           throw new Error(
             `장비(${asset?.managementCode || asset?.serialNumber})는 현재 사용 가능한 상태가 아닙니다.`,
+          );
+        }
+
+        // 다른 활성 예약 중복 배정 체크
+        if (occupiedByOthers.has(assetId)) {
+          throw new Error(
+            `장비(${asset.managementCode || asset.serialNumber})는 다른 예약에 이미 배정되어 있습니다.`,
           );
         }
 
@@ -338,6 +567,38 @@ export const updateAssignment = mutation({
     const reservation = await ctx.db.get(args.reservationId);
     if (!reservation) throw new Error("Reservation not found");
 
+    // 수량 초과 체크: 예약된 수량을 넘을 수 없음
+    const targetItem = reservation.items.find(
+      (item) => item.equipmentId === args.equipmentId,
+    );
+    if (targetItem && args.newAssetIds.length > targetItem.quantity) {
+      throw new Error(
+        `'${targetItem.name || "장비"}'의 배정 수량(${args.newAssetIds.length}개)이 예약 수량(${targetItem.quantity}개)을 초과합니다.`,
+      );
+    }
+
+    // 날짜가 겹치는 다른 활성 예약에서 점유 중인 asset ID 수집
+    const allReservations = await ctx.db.query("reservations").collect();
+    const occupiedByOthers = new Set<string>();
+    allReservations.forEach((r) => {
+      const isActive = r.status === "approved" || r.status === "rented";
+      if (!isActive || r._id === args.reservationId) return;
+      const overlaps =
+        r.startDate < reservation.endDate && r.endDate > reservation.startDate;
+      if (!overlaps) return;
+      r.items.forEach((item) => {
+        item.assignedAssets?.forEach((id) => occupiedByOthers.add(id));
+      });
+    });
+
+    const UNAVAILABLE_STATUSES = [
+      "maintenance",
+      "broken",
+      "lost",
+      "repair",
+      "retired",
+    ];
+
     const now = Date.now();
     const user = await ctx.db.get(reservation.userId);
     const userName = user?.name || "Unknown";
@@ -374,13 +635,17 @@ export const updateAssignment = mutation({
     for (const assetId of toOccupy) {
       const asset = await ctx.db.get(assetId);
 
-      // 교체 대상이 사용 가능한지 확인 (단, 기존 목록에 있던거면 패스)
-      if (
-        !asset ||
-        (asset.status !== "available" && !args.oldAssetIds.includes(assetId))
-      ) {
+      // 상태 불량 체크
+      if (!asset || UNAVAILABLE_STATUSES.includes(asset.status)) {
         throw new Error(
-          `교체하려는 장비(${asset?.managementCode || asset?.serialNumber})는 이미 사용 중입니다.`,
+          `장비(${asset?.managementCode || asset?.serialNumber})는 현재 사용 가능한 상태가 아닙니다.`,
+        );
+      }
+
+      // 날짜가 겹치는 다른 예약 중복 배정 체크
+      if (occupiedByOthers.has(assetId)) {
+        throw new Error(
+          `장비(${asset.managementCode || asset.serialNumber})는 같은 날짜의 다른 예약에 이미 배정되어 있습니다.`,
         );
       }
 
@@ -436,13 +701,18 @@ export const getHistory = query({
     // 사용자 이름, 예약 번호 등을 조인해서 리턴
     const enrichedHistory = await Promise.all(
       history.map(async (h) => {
-        const user = await ctx.db.get(h.userId);
-        const reservation = await ctx.db.get(h.reservationId);
+        const user = h.userId ? await ctx.db.get(h.userId) : null;
+        const reservation = h.reservationId
+          ? await ctx.db.get(h.reservationId)
+          : null;
 
         return {
           ...h,
-          userName: user?.name || "Unknown",
-          reservationNumber: reservation?.reservationNumber || "Unknown",
+          userName: (user as { name?: string } | null)?.name || "Unknown",
+          reservationNumber:
+            (
+              reservation as { reservationNumber?: string } | null
+            )?.reservationNumber || "Unknown",
         };
       }),
     );
@@ -519,5 +789,148 @@ export const migrateNames = mutation({
     }
 
     return { updated: updatedCount, total: assets.length };
+  },
+});
+
+// ===========================
+// 6. 엑셀 가져오기: 일괄 upsert
+// ===========================
+export const bulkUpsertAssets = mutation({
+  args: {
+    items: v.array(
+      v.object({
+        id: v.optional(v.string()),           // 기존 asset _id (수정용)
+        equipmentId: v.optional(v.string()),  // equipment _id
+        equipmentName: v.optional(v.string()),
+        serialNumber: v.optional(v.string()),
+        managementCode: v.optional(v.string()),
+        status: v.optional(v.string()),
+        note: v.optional(v.string()),
+      })
+    ),
+    fileName: v.optional(v.string()), // 엑셀 파일명 (변경 이력 기록용)
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    const allEquipment = await ctx.db.query("equipment").collect();
+    const now = Date.now();
+    const batchId = `excel_import_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+    const affectedEquipmentIds = new Set<Id<"equipment">>();
+    let created = 0, updated = 0, errors = 0;
+
+    for (const item of args.items) {
+      try {
+        // equipment 조회 (ID 우선, 이름 fallback)
+        let resolvedEquipmentId: Id<"equipment"> | null = null;
+        if (item.equipmentId) {
+          const eq = allEquipment.find((e) => e._id === item.equipmentId);
+          if (eq) resolvedEquipmentId = eq._id;
+        }
+        if (!resolvedEquipmentId && item.equipmentName) {
+          const eq = allEquipment.find((e) => e.name === item.equipmentName);
+          if (eq) resolvedEquipmentId = eq._id;
+        }
+
+        if (item.id) {
+          // 수정: ID로 직접 patch
+          const assetId = item.id as Id<"assets">;
+          const existing = await ctx.db.get(assetId);
+          if (!existing) { errors++; continue; }
+          const patch: Partial<{ serialNumber: string; managementCode: string; status: string; note: string; updatedAt: number }> = { updatedAt: now };
+          if (item.serialNumber !== undefined) patch.serialNumber = item.serialNumber;
+          if (item.managementCode !== undefined) patch.managementCode = item.managementCode;
+          if (item.status !== undefined) patch.status = item.status;
+          if (item.note !== undefined) patch.note = item.note;
+          await ctx.db.patch(assetId, patch);
+          if (existing.equipmentId) affectedEquipmentIds.add(existing.equipmentId);
+          updated++;
+
+          // 변경 이력 기록
+          if (identity) {
+            const changes = [];
+            if (item.serialNumber !== undefined && existing.serialNumber !== item.serialNumber) {
+              changes.push({ field: "serialNumber", fieldLabel: "시리얼번호", oldValue: existing.serialNumber, newValue: item.serialNumber });
+            }
+            if (item.managementCode !== undefined && existing.managementCode !== item.managementCode) {
+              changes.push({ field: "managementCode", fieldLabel: "자산번호", oldValue: existing.managementCode, newValue: item.managementCode });
+            }
+            if (item.status !== undefined && existing.status !== item.status) {
+              changes.push({ field: "status", fieldLabel: "상태", oldValue: existing.status, newValue: item.status });
+            }
+            if (item.note !== undefined && existing.note !== item.note) {
+              changes.push({ field: "note", fieldLabel: "비고", oldValue: existing.note, newValue: item.note });
+            }
+
+            if (changes.length > 0) {
+              await ctx.scheduler.runAfter(0, internal.changeHistory.recordChange, {
+                userId: identity.subject,
+                userName: identity.name || identity.email || "Unknown",
+                userEmail: identity.email || "",
+                targetType: "asset",
+                targetId: assetId,
+                targetName: `${existing.equipmentName} - ${existing.serialNumber}`,
+                action: "update",
+                changes,
+                source: "excel_import",
+                sourceDetail: args.fileName,
+                batchId,
+              });
+            }
+          }
+        } else {
+          // 신규: equipmentId 필수
+          if (!resolvedEquipmentId) { errors++; continue; }
+          const eq = allEquipment.find((e) => e._id === resolvedEquipmentId);
+          const newAssetId = await ctx.db.insert("assets", {
+            equipmentId: resolvedEquipmentId,
+            equipmentName: eq?.name ?? item.equipmentName ?? "",
+            serialNumber: item.serialNumber ?? "",
+            managementCode: item.managementCode,
+            status: item.status ?? "available",
+            note: item.note,
+            createdAt: now,
+            updatedAt: now,
+          });
+          affectedEquipmentIds.add(resolvedEquipmentId);
+          created++;
+
+          // 변경 이력 기록
+          if (identity) {
+            await ctx.scheduler.runAfter(0, internal.changeHistory.recordChange, {
+              userId: identity.subject,
+              userName: identity.name || identity.email || "Unknown",
+              userEmail: identity.email || "",
+              targetType: "asset",
+              targetId: newAssetId,
+              targetName: `${eq?.name ?? item.equipmentName} - ${item.serialNumber}`,
+              action: "create",
+              changes: [
+                { field: "equipmentName", fieldLabel: "장비명", newValue: eq?.name ?? item.equipmentName ?? "" },
+                { field: "serialNumber", fieldLabel: "시리얼번호", newValue: item.serialNumber ?? "" },
+                { field: "status", fieldLabel: "상태", newValue: item.status ?? "available" },
+              ],
+              source: "excel_import",
+              sourceDetail: args.fileName,
+              batchId,
+            });
+          }
+        }
+      } catch {
+        errors++;
+      }
+    }
+
+    // 자산 추가된 장비의 totalQuantity 자동 재계산
+    for (const eqId of affectedEquipmentIds) {
+      const assetCount = (
+        await ctx.db
+          .query("assets")
+          .withIndex("by_equipmentId", (q) => q.eq("equipmentId", eqId))
+          .collect()
+      ).length;
+      await ctx.db.patch(eqId, { totalQuantity: assetCount });
+    }
+
+    return { created, updated, errors };
   },
 });
