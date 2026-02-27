@@ -43,7 +43,7 @@ export default function Header() {
   const { isAuthenticated } = useConvexAuth();
   const { signOut } = useClerk();
 
-  // 장바구니 상태
+  // 장비리스트 상태
   const storeItems = useCartStore((state) => state.items);
   const displayItems = isAuthenticated ? storeItems : [];
   const itemCount = displayItems.reduce((sum, item) => sum + item.quantity, 0);
@@ -81,7 +81,7 @@ export default function Header() {
             useCartStore.setState({ items: dbCartItems });
           }
         } catch (e) {
-          console.error("장바구니 파싱 오류", e);
+          console.error("장비리스트 파싱 오류", e);
         }
       }
       setTimeout(() => setDbSyncInitialized(true), 0);
@@ -89,7 +89,7 @@ export default function Header() {
   }, [isAuthenticated, myProfile, dbSyncInitialized]);
 
   // ---------------------------------------------------------------
-  // [로직 2: 저장하기] 장바구니가 변하면 실시간으로 DB 저장
+  // [로직 2: 저장하기] 장비리스트가 변하면 실시간으로 DB 저장
   // ---------------------------------------------------------------
   useEffect(() => {
     const syncToDB = async () => {
@@ -97,7 +97,7 @@ export default function Header() {
         try {
           await saveCartToDB({ cartJson: JSON.stringify(storeItems) });
         } catch (e) {
-          console.error("장바구니 저장 실패", e);
+          console.error("장비리스트 저장 실패", e);
         }
       }
     };
@@ -162,7 +162,7 @@ export default function Header() {
             </Link>
 
             <div className="flex items-center space-x-2 md:space-x-4">
-              {/* 장바구니 버튼 (항상 보임) */}
+              {/* 장비리스트 버튼 (항상 보임) */}
               {isAuthenticated && (
                 <button
                   onClick={() => navigate("/cart")}

@@ -57,7 +57,7 @@ export default function StudentDashboard() {
     // await supabase.auth.signOut(); // 주석 처리
 
     navigate("/");
-    alert("로그아웃 되었습니다. (장바구니 초기화 완료)");
+    alert("로그아웃 되었습니다. (장비리스트 초기화 완료)");
   };
 
   if (loading)

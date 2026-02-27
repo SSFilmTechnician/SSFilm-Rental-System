@@ -36,18 +36,18 @@ export default function StepSummary() {
   };
 
   const handleAddToCart = () => {
-    // TODO: 실제 장바구니 연동
+    // TODO: 실제 장비리스트 연동
     // 여기서는 일단 로컬스토리지나 전역 상태에 저장하고
     // 예약 페이지로 이동하는 로직 구현
 
     // 임시: 콘솔에 출력
-    console.log("장바구니에 담을 장비:", {
+    console.log("장비리스트에 담을 장비:", {
       date: state.basicInfo.date,
       crewSize: state.basicInfo.crewSize,
       selections: allSelections,
     });
 
-    alert("장비가 장바구니에 담겼습니다!");
+    alert("장비가 장비리스트에 담겼습니다!");
 
     // 위자드 닫기 및 예약 페이지로 이동
     dispatch({ type: "RESET" });
@@ -143,13 +143,13 @@ export default function StepSummary() {
 
       {/* 네비게이션 버튼 */}
       <div className="space-y-2 pt-4">
-        {/* 장바구니에 담기 */}
+        {/* 장비리스트에 담기 */}
         <button
           onClick={handleAddToCart}
           className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:shadow-lg transition-all active:scale-95"
         >
           <ShoppingCart className="w-5 h-5" />
-          장바구니에 담기
+          장비리스트에 담기
         </button>
 
         {/* 하단 버튼들 */}

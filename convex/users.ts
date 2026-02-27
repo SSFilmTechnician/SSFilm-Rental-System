@@ -10,7 +10,7 @@ import { internal } from "./_generated/api";
 
 const ADMIN_EMAILS = ["SSFT@ssfilm.ac.kr", "cinedop@naver.com"];
 
-// 1. 내 정보 가져오기 (장바구니 포함)
+// 1. 내 정보 가져오기 (장비리스트 포함)
 export const getMyProfile = query({
   args: {},
   handler: async (ctx) => {
@@ -25,7 +25,7 @@ export const getMyProfile = query({
   },
 });
 
-// ✅ [NEW] 장바구니 저장하기
+// ✅ [NEW] 장비리스트 저장하기
 export const saveCart = mutation({
   args: { cartJson: v.string() },
   handler: async (ctx, args) => {
@@ -83,7 +83,7 @@ export const store = mutation({
         studentId: "ADMIN",
         phone: "000-0000-0000",
         department: "관리자",
-        cart: "[]", // 초기 장바구니
+        cart: "[]", // 초기 장비리스트
       });
     }
 
@@ -96,7 +96,7 @@ export const store = mutation({
       studentId: "",
       phone: "",
       department: "",
-      cart: "[]", // 초기 장바구니
+      cart: "[]", // 초기 장비리스트
     });
   },
 });

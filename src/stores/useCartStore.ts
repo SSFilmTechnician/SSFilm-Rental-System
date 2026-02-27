@@ -24,7 +24,7 @@ export const useCartStore = create(
     (set) => ({
       items: [],
 
-      // 장바구니 담기
+      // 장비리스트 담기
       addItem: (newItem) =>
         set((state) => {
           const existingItem = state.items.find(

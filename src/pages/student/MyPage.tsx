@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import {
   Clock,
   CheckCircle2,
@@ -14,13 +15,31 @@ import {
   User,
   ShieldAlert,
   Loader2,
+  Edit,
 } from "lucide-react";
+import ReservationEditModal from "../../components/student/ReservationEditModal";
+
+// 수정할 예약 데이터 타입
+type ReservationToEdit = {
+  _id: Id<"reservations">;
+  purpose: string;
+  purposeDetail: string;
+  startDate: string;
+  endDate: string;
+  items: Array<{
+    equipmentId: Id<"equipment">;
+    name: string;
+    quantity: number;
+  }>;
+};
 
 export default function MyPage() {
   const userProfile = useQuery(api.users.getMyProfile);
   const reservations = useQuery(api.reservations.getMyReservations);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editingReservation, setEditingReservation] =
+    useState<ReservationToEdit | null>(null);
 
   const toggleExpand = (id: string) => {
     setExpandedId((prev) => (prev === id ? null : id));
@@ -283,8 +302,32 @@ export default function MyPage() {
                     </div>
 
                     <div>
-                      <div className="text-xs font-bold text-gray-500 uppercase mb-2 ml-1">
-                        상세 장비 목록
+                      <div className="flex justify-between items-center mb-2">
+                        <h4 className="text-xs font-bold text-gray-500 uppercase">
+                          상세 장비 목록
+                        </h4>
+                        {res.status === "pending" && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingReservation({
+                                _id: res._id,
+                                purpose: res.purpose,
+                                purposeDetail: res.purposeDetail,
+                                startDate: res.startDate,
+                                endDate: res.endDate,
+                                items: res.items.map((item) => ({
+                                  equipmentId: item.equipmentId,
+                                  name: item.name,
+                                  quantity: item.quantity,
+                                })),
+                              });
+                            }}
+                            className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium"
+                          >
+                            <Edit className="w-3 h-3" /> 수정
+                          </button>
+                        )}
                       </div>
                       <ul className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-100 shadow-sm">
                         {res.items.map((item, idx) => (
@@ -303,15 +346,17 @@ export default function MyPage() {
                       </ul>
                     </div>
 
+                    {/* 인쇄 버튼 */}
                     {canShowPrintButton(res.status) && (
                       <div className="flex justify-end pt-2 border-t border-gray-200 mt-4">
                         <button
-                          onClick={() =>
+                          onClick={(e) => {
+                            e.stopPropagation();
                             window.open(
                               `/print/reservation/${res._id}`,
-                              "_blank",
-                            )
-                          }
+                              "_blank"
+                            );
+                          }}
                           className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-white border border-gray-300 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-50 hover:text-black hover:border-black transition-all shadow-sm active:scale-[0.98]"
                         >
                           <Printer className="w-4 h-4" />
@@ -325,6 +370,14 @@ export default function MyPage() {
             );
           })}
         </div>
+      )}
+
+      {/* 예약 수정 모달 */}
+      {editingReservation && (
+        <ReservationEditModal
+          reservation={editingReservation}
+          onClose={() => setEditingReservation(null)}
+        />
       )}
     </div>
   );

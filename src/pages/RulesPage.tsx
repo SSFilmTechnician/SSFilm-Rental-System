@@ -17,44 +17,48 @@ export default function RulesPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-12 min-h-screen pb-20">
-      <div className="text-center mb-10">
-        <h1 className="text-3xl font-bold mb-2">
+      <div className="text-center mb-10 px-2">
+        <h1 className="text-2xl sm:text-3xl font-bold mb-2 break-words">
           SSFilm 장비 예약 시스템 이용 규정
         </h1>
-        <p className="text-gray-500">
+        <p className="text-sm sm:text-base text-gray-500 break-words">
           안전하고 공정한 장비 사용을 위해 아래 규정을 반드시 숙지해주시기
           바랍니다.
         </p>
       </div>
 
       {/* 탭 네비게이션 */}
-      <div className="flex justify-center mb-8">
-        <div className="bg-gray-100 p-1 rounded-lg flex">
+      <div className="flex justify-center mb-8 px-2">
+        <div className="bg-gray-100 p-1 rounded-lg flex flex-col sm:flex-row gap-1 sm:gap-0 w-full sm:w-auto max-w-md sm:max-w-none">
           <button
             onClick={() => setActiveTab("summary")}
-            className={`px-6 py-2.5 text-sm font-bold rounded-md transition-all flex items-center gap-2 ${
+            className={`px-4 sm:px-6 py-2.5 text-xs sm:text-sm font-bold rounded-md transition-all flex items-center justify-center gap-2 ${
               activeTab === "summary"
                 ? "bg-white shadow text-black"
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            <AlertTriangle className="w-4 h-4" /> 신청 시 유의사항 (요약)
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <span className="hidden sm:inline">신청 시 유의사항 (요약)</span>
+            <span className="sm:hidden">유의사항 요약</span>
           </button>
           <button
             onClick={() => setActiveTab("detailed")}
-            className={`px-6 py-2.5 text-sm font-bold rounded-md transition-all flex items-center gap-2 ${
+            className={`px-4 sm:px-6 py-2.5 text-xs sm:text-sm font-bold rounded-md transition-all flex items-center justify-center gap-2 ${
               activeTab === "detailed"
                 ? "bg-white shadow text-black"
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            <Book className="w-4 h-4" /> 장비 사용 세부 규칙 (전문)
+            <Book className="w-4 h-4 flex-shrink-0" />
+            <span className="hidden sm:inline">장비 사용 세부 규칙 (전문)</span>
+            <span className="sm:hidden">세부 규칙 전문</span>
           </button>
         </div>
       </div>
 
       {/* 컨텐츠 영역 */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 md:p-10">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 md:p-10 break-words">
         {/* 탭 1: 유의사항 (요약) */}
         {activeTab === "summary" && (
           <div className="space-y-8 animate-fadeIn">
@@ -63,16 +67,16 @@ export default function RulesPage() {
               <h3 className="text-red-700 font-bold text-lg mb-2 flex items-center gap-2">
                 <ShieldAlert className="w-5 h-5" /> 필독 사항
               </h3>
-              <ul className="list-disc list-inside text-red-700 space-y-1 text-sm">
-                <li>
-                  장비대여 신청 전 <b>‘장비 사용 세부 규칙’</b>을 반드시
+              <ul className="list-disc list-outside text-red-700 space-y-1 text-sm pl-5">
+                <li className="pl-1">
+                  장비대여 신청 전 <b>'장비 사용 세부 규칙'</b>을 반드시
                   숙지해야 합니다.
                 </li>
-                <li>
+                <li className="pl-1">
                   규정 미숙지로 인해 발생하는 모든 문제는 <b>신청인의 책임</b>
                   입니다.
                 </li>
-                <li>
+                <li className="pl-1">
                   개인 자격의 장비 대여는 불가하며, 학과 활동 목적이어야 합니다.
                 </li>
               </ul>
@@ -84,54 +88,56 @@ export default function RulesPage() {
                 <Clock className="w-5 h-5" /> 신청 마감 시간 (근무일 기준 3일
                 전)
               </h3>
-              <div className="overflow-hidden border rounded-xl">
+              <div className="overflow-x-auto border rounded-xl">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
-                        반출 희망일 (10:00 - 16:00)
+                      <th className="px-4 sm:px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
+                        반출 희망일<br className="sm:hidden" />
+                        <span className="hidden sm:inline"> </span>(10:00 - 16:00)
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-bold text-red-500 uppercase tracking-wider">
-                        신청 마감 일시 (오후 5시)
+                      <th className="px-4 sm:px-6 py-3 text-left text-xs font-bold text-red-500 uppercase tracking-wider">
+                        신청 마감 일시<br className="sm:hidden" />
+                        <span className="hidden sm:inline"> </span>(오후 5시)
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200 text-sm">
+                  <tbody className="bg-white divide-y divide-gray-200 text-xs sm:text-sm">
                     <tr>
-                      <td className="px-6 py-4 font-medium">월요일</td>
-                      <td className="px-6 py-4 text-gray-600">
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 font-medium">월요일</td>
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-600">
                         이전 주{" "}
                         <span className="font-bold text-red-600">수요일</span>{" "}
                         오후 5시까지
                       </td>
                     </tr>
                     <tr>
-                      <td className="px-6 py-4 font-medium">화요일</td>
-                      <td className="px-6 py-4 text-gray-600">
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 font-medium">화요일</td>
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-600">
                         이전 주{" "}
                         <span className="font-bold text-red-600">목요일</span>{" "}
                         오후 5시까지
                       </td>
                     </tr>
                     <tr>
-                      <td className="px-6 py-4 font-medium">수요일</td>
-                      <td className="px-6 py-4 text-gray-600">
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 font-medium">수요일</td>
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-600">
                         이전 주{" "}
                         <span className="font-bold text-red-600">금요일</span>{" "}
                         오후 5시까지
                       </td>
                     </tr>
                     <tr>
-                      <td className="px-6 py-4 font-medium">목요일</td>
-                      <td className="px-6 py-4 text-gray-600">
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 font-medium">목요일</td>
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-600">
                         해당 주{" "}
                         <span className="font-bold text-red-600">월요일</span>{" "}
                         오후 5시까지
                       </td>
                     </tr>
                     <tr>
-                      <td className="px-6 py-4 font-medium">금요일</td>
-                      <td className="px-6 py-4 text-gray-600">
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 font-medium">금요일</td>
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-600">
                         해당 주{" "}
                         <span className="font-bold text-red-600">화요일</span>{" "}
                         오후 5시까지

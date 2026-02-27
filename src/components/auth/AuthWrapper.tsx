@@ -4,6 +4,162 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { LogOut } from "lucide-react";
 
+// 승인 대기 화면 컴포넌트
+function PendingApprovalScreen({
+  userProfile,
+  updateUser,
+  signOut,
+}: {
+  userProfile: {
+    name?: string;
+    studentId?: string;
+    phone?: string;
+    isApproved?: boolean;
+  };
+  updateUser: (args: {
+    name: string;
+    studentId: string;
+    phone: string;
+  }) => Promise<null>;
+  signOut: () => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: userProfile.name || "",
+    studentId: userProfile.studentId || "",
+    phone: userProfile.phone || "",
+  });
+
+  const handleSaveEdit = async () => {
+    if (!editForm.name || !editForm.studentId || !editForm.phone) {
+      return alert("모든 항목을 입력해주세요.");
+    }
+
+    try {
+      await updateUser({
+        name: editForm.name,
+        studentId: editForm.studentId,
+        phone: editForm.phone,
+      });
+      alert("정보가 수정되었습니다.");
+      setIsEditing(false);
+    } catch (error) {
+      alert("수정 실패: " + error);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-5 text-center">
+      <div className="bg-white p-10 rounded-3xl shadow-xl max-w-sm w-full border border-gray-100">
+        <div className="w-16 h-16 bg-yellow-50 text-yellow-500 rounded-2xl flex items-center justify-center mx-auto mb-6 text-3xl shadow-sm">
+          🔒
+        </div>
+        <h2 className="text-xl font-black text-gray-900 mb-3">
+          관리자 승인 대기 중
+        </h2>
+        <p className="text-gray-500 mb-8 text-sm leading-relaxed">
+          <span className="font-bold text-gray-900">{userProfile.name}</span>
+          님, 가입 신청이 접수되었습니다.
+          <br />
+          학과 사무실 승인 후 이용 가능합니다.
+        </p>
+
+        {isEditing ? (
+          // 편집 모드
+          <div className="bg-gray-50 p-5 rounded-xl text-sm text-left mb-8 space-y-3 border border-gray-100">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                이름
+              </label>
+              <input
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-black focus:outline-none"
+                value={editForm.name}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, name: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                학번 (8자리)
+              </label>
+              <input
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-black focus:outline-none"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={8}
+                value={editForm.studentId}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, studentId: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                연락처
+              </label>
+              <input
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-black focus:outline-none"
+                value={editForm.phone}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, phone: e.target.value })
+                }
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => {
+                  setEditForm({
+                    name: userProfile.name || "",
+                    studentId: userProfile.studentId || "",
+                    phone: userProfile.phone || "",
+                  });
+                  setIsEditing(false);
+                }}
+                className="flex-1 px-3 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                className="flex-1 px-3 py-2 text-sm bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
+              >
+                저장
+              </button>
+            </div>
+          </div>
+        ) : (
+          // 조회 모드
+          <div className="bg-gray-50 p-5 rounded-xl text-sm text-left text-gray-600 mb-8 space-y-2 border border-gray-100">
+            <p className="flex justify-between">
+              <span>학번:</span>{" "}
+              <span className="font-bold">{userProfile.studentId}</span>
+            </p>
+            <p className="flex justify-between">
+              <span>연락처:</span>{" "}
+              <span className="font-bold">{userProfile.phone}</span>
+            </p>
+            <button
+              onClick={() => setIsEditing(true)}
+              className="w-full mt-3 py-2 text-xs text-blue-600 hover:bg-blue-50 rounded-lg transition-colors font-medium"
+            >
+              정보 수정하기
+            </button>
+          </div>
+        )}
+
+        <button
+          onClick={() => signOut()}
+          className="flex items-center justify-center gap-2 w-full bg-gray-900 text-white py-3.5 rounded-xl hover:bg-black transition-colors font-bold text-sm"
+        >
+          <LogOut className="w-4 h-4" /> 로그아웃
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function AuthWrapper({
   children,
 }: {
@@ -89,7 +245,10 @@ export default function AuthWrapper({
               <input
                 className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-black focus:outline-none transition-all"
                 placeholder="예: 20240001"
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={8}
                 value={form.studentId}
                 onChange={(e) =>
                   setForm({ ...form, studentId: e.target.value })
@@ -122,43 +281,14 @@ export default function AuthWrapper({
     );
   }
 
-  // 3. [승인 대기] 정보는 있는데 승인이 안 된 경우 -> 차단 화면 표시
+  // 3. [승인 대기] 정보는 있는데 승인이 안 된 경우 -> 차단 화면 표시 (수정 가능)
   if (userProfile.isApproved !== true) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-5 text-center">
-        <div className="bg-white p-10 rounded-3xl shadow-xl max-w-sm w-full border border-gray-100">
-          <div className="w-16 h-16 bg-yellow-50 text-yellow-500 rounded-2xl flex items-center justify-center mx-auto mb-6 text-3xl shadow-sm">
-            🔒
-          </div>
-          <h2 className="text-xl font-black text-gray-900 mb-3">
-            관리자 승인 대기 중
-          </h2>
-          <p className="text-gray-500 mb-8 text-sm leading-relaxed">
-            <span className="font-bold text-gray-900">{userProfile.name}</span>
-            님, 가입 신청이 접수되었습니다.
-            <br />
-            학과 사무실 승인 후 이용 가능합니다.
-          </p>
-
-          <div className="bg-gray-50 p-5 rounded-xl text-sm text-left text-gray-600 mb-8 space-y-2 border border-gray-100">
-            <p className="flex justify-between">
-              <span>학번:</span>{" "}
-              <span className="font-bold">{userProfile.studentId}</span>
-            </p>
-            <p className="flex justify-between">
-              <span>연락처:</span>{" "}
-              <span className="font-bold">{userProfile.phone}</span>
-            </p>
-          </div>
-
-          <button
-            onClick={() => signOut()}
-            className="flex items-center justify-center gap-2 w-full bg-gray-900 text-white py-3.5 rounded-xl hover:bg-black transition-colors font-bold text-sm"
-          >
-            <LogOut className="w-4 h-4" /> 로그아웃
-          </button>
-        </div>
-      </div>
+      <PendingApprovalScreen
+        userProfile={userProfile}
+        updateUser={updateUser}
+        signOut={signOut}
+      />
     );
   }
 

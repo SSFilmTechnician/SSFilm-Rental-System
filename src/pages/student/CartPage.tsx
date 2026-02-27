@@ -29,7 +29,7 @@ export default function CartPage() {
   // 내 정보(이름, 학번) 불러오기
   const userProfile = useQuery(api.users.getMyProfile);
 
-  // 예약 생성 API 및 장바구니 DB 저장
+  // 예약 생성 API 및 장비리스트 DB 저장
   const createReservation = useMutation(api.reservations.create);
   const saveCartToDB = useMutation(api.users.saveCart);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -63,7 +63,7 @@ export default function CartPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (items.length === 0) return alert("장바구니가 비어있습니다.");
+    if (items.length === 0) return alert("장비리스트가 비어있습니다.");
     if (!formData.startDate || !formData.endDate)
       return alert("대여 기간을 설정해주세요.");
 
@@ -106,7 +106,7 @@ ${formData.inquiry || "없음"}
         endDate: endDateTime,
       });
 
-      // 예약 성공 시 즉시 장바구니 비우기 (로컬 + DB)
+      // 예약 성공 시 즉시 장비리스트 비우기 (로컬 + DB)
       clearCart();
       await saveCartToDB({ cartJson: "[]" });
 
@@ -132,7 +132,7 @@ ${formData.inquiry || "없음"}
       {/* 헤더 영역 */}
       <div className="flex items-end justify-between mb-6 md:mb-8 border-b pb-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-black text-gray-900">장바구니</h1>
+          <h1 className="text-2xl md:text-3xl font-black text-gray-900">장비리스트</h1>
           <p className="text-gray-500 mt-1 text-xs md:text-sm">
             신청서를 작성하고 예약을 완료하세요.
           </p>

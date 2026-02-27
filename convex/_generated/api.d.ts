@@ -19,7 +19,6 @@ import type * as http from "../http.js";
 import type * as migration from "../migration.js";
 import type * as notifications from "../notifications.js";
 import type * as reservations from "../reservations.js";
-import type * as testOpenAI from "../testOpenAI.js";
 import type * as users from "../users.js";
 
 import type {
@@ -40,7 +39,6 @@ declare const fullApi: ApiFromModules<{
   migration: typeof migration;
   notifications: typeof notifications;
   reservations: typeof reservations;
-  testOpenAI: typeof testOpenAI;
   users: typeof users;
 }>;
 

@@ -94,7 +94,7 @@ export default function RecommendationCard({
           ) : (
             <>
               <ShoppingCart className="w-3.5 h-3.5" />
-              장바구니 담기
+              장비리스트 담기
             </>
           )}
         </button>

@@ -130,7 +130,66 @@ export const getEquipmentCalendarData = query({
   },
 });
 
-// 4. 예약 상세 정보 가져오기 (인쇄용)
+// 4. 예약 수정 (승인 대기 중일 때만 가능)
+export const update = mutation({
+  args: {
+    reservationId: v.id("reservations"),
+    items: v.array(
+      v.object({
+        equipmentId: v.id("equipment"),
+        quantity: v.number(),
+        name: v.string(),
+      })
+    ),
+    purpose: v.string(),
+    purposeDetail: v.string(),
+    startDate: v.string(),
+    endDate: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("로그인이 필요합니다.");
+    }
+
+    const reservation = await ctx.db.get(args.reservationId);
+    if (!reservation) {
+      throw new Error("예약을 찾을 수 없습니다.");
+    }
+
+    // 승인 대기 중이 아니면 수정 불가
+    if (reservation.status !== "pending") {
+      throw new Error("승인 대기 중인 예약만 수정할 수 있습니다.");
+    }
+
+    // 본인의 예약인지 확인
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+      .first();
+
+    if (!user || reservation.userId !== user._id) {
+      throw new Error("본인의 예약만 수정할 수 있습니다.");
+    }
+
+    // 예약 정보 업데이트
+    await ctx.db.patch(args.reservationId, {
+      purpose: args.purpose,
+      purposeDetail: args.purposeDetail,
+      startDate: args.startDate,
+      endDate: args.endDate,
+      items: args.items.map((item) => ({
+        equipmentId: item.equipmentId,
+        quantity: item.quantity,
+        name: item.name,
+        checkedOut: false,
+        returned: false,
+      })),
+    });
+  },
+});
+
+// 5. 예약 상세 정보 가져오기 (인쇄용)
 export const getById = query({
   args: { id: v.id("reservations") },
   handler: async (ctx, args) => {

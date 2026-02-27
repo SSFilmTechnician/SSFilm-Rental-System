@@ -31,7 +31,7 @@ export default function EquipmentDetail() {
       quantity: quantity,
       imageUrl: equipment.imageUrl,
     });
-    alert("장바구니에 담았습니다.");
+    alert("장비리스트에 담았습니다.");
   };
 
   if (equipment === undefined)
@@ -143,10 +143,10 @@ export default function EquipmentDetail() {
             )}
           </div>
 
-          {/* 장바구니 담기 (로그인 시에만) */}
+          {/* 장비리스트 담기 (로그인 시에만) */}
           {isAuthenticated && (
             <div className="border-t border-gray-200 pt-5">
-              <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center justify-between mb-3">
                 <span className="text-lg font-bold text-gray-700">
                   대여 수량
                 </span>
@@ -162,12 +162,33 @@ export default function EquipmentDetail() {
                     {quantity}
                   </div>
                   <button
-                    onClick={() => setQuantity(quantity + 1)}
-                    className="px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold transition-colors border-l"
+                    onClick={() =>
+                      setQuantity(
+                        Math.min(equipment.totalQuantity, quantity + 1)
+                      )
+                    }
+                    disabled={quantity >= equipment.totalQuantity}
+                    className={`px-4 py-2 font-bold transition-colors border-l ${
+                      quantity >= equipment.totalQuantity
+                        ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                        : "bg-gray-50 hover:bg-gray-100 text-gray-600"
+                    }`}
                   >
                     +
                   </button>
                 </div>
+              </div>
+
+              {/* 최대 수량 안내 */}
+              <div className="text-right mb-5">
+                <span className="text-xs text-gray-500">
+                  최대 보유 수량: {equipment.totalQuantity}개
+                  {quantity >= equipment.totalQuantity && (
+                    <span className="text-orange-600 font-bold ml-2">
+                      (최대)
+                    </span>
+                  )}
+                </span>
               </div>
 
               <div className="flex flex-col gap-3">
@@ -181,12 +202,12 @@ export default function EquipmentDetail() {
                   }`}
                 >
                   <ShoppingCart className="w-6 h-6" />
-                  {equipment.totalQuantity === 0 ? "품절" : "장바구니 담기"}
+                  {equipment.totalQuantity === 0 ? "품절" : "장비리스트 담기"}
                 </button>
               </div>
 
               <p className="text-center text-xs text-gray-400 mt-4">
-                * 장바구니에 담은 후 예약 페이지에서 날짜를 선택합니다.
+                * 장비리스트에 담은 후 예약 페이지에서 날짜를 선택합니다.
               </p>
             </div>
           )}
