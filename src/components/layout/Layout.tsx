@@ -1,6 +1,6 @@
 import { Outlet } from "react-router-dom";
 import Header from "./Header";
-// AI 위자드 - 교수님 AI 모델 적용 후 활성화 예정
+// AI 위자드 - 테스트 완료 후 활성화 예정
 // import AIWizardButton from "../ai-wizard/AIWizardButton";
 // AI 챗봇 - 테스트 완료 후 활성화 예정
 // import ChatbotButton from "@/components/chatbot/ChatbotButton";
@@ -45,7 +45,7 @@ export default function Layout() {
         </div>
       </footer>
 
-      {/* AI 위자드 - 교수님 AI 모델 적용 후 활성화 예정
+      {/* AI 위자드 - 테스트 완료 후 활성화 예정
       <AIWizardButton />
       */}
 

@@ -49,6 +49,7 @@ function App() {
           <Route index element={<Home />} />
           <Route path="equipment/:id" element={<EquipmentDetail />} />
           <Route path="rules" element={<RulesPage />} />
+
           <Route
             path="inventory"
             element={

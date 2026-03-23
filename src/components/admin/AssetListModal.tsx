@@ -66,6 +66,7 @@ export default function AssetListModal({
   const updateAsset = useMutation(api.assets.update);
   const deleteAsset = useMutation(api.assets.remove);
   const updateEquipment = useMutation(api.equipment.update);
+  const createRepair = useMutation(api.admin.createRepair);
 
   // UI State
   const [isAddMode, setIsAddMode] = useState(false);
@@ -219,6 +220,11 @@ export default function AssetListModal({
   const handleUpdate = async () => {
     if (!editingId) return;
     try {
+      const asset = assets?.find((a) => a._id === editingId);
+      const previousStatus = asset?.status;
+      const UNAVAILABLE_STATUSES = ["repair", "maintenance", "broken", "lost"];
+
+      // ✅ 장비 상태 업데이트
       await updateAsset({
         id: editingId,
         serialNumber: serialNumber.trim() || undefined,
@@ -226,10 +232,43 @@ export default function AssetListModal({
         status,
         note: note.trim(),
       });
+
+      // ✅ 수리중/파손 등으로 변경 시 자동으로 수리 현황에 등록
+      const wasAvailable = !UNAVAILABLE_STATUSES.includes(previousStatus || "");
+      const nowUnavailable = UNAVAILABLE_STATUSES.includes(status);
+
+      if (wasAvailable && nowUnavailable && equipment && asset) {
+        await createRepair({
+          equipmentId: equipment._id,
+          assetId: editingId,
+          equipmentName: equipment.name,
+          serialNumber: serialNumber.trim() || asset.serialNumber,
+          damageType: status === "lost" ? "lost" : "damaged",
+          damageDescription: note.trim() || "장비 관리에서 상태 변경됨",
+        });
+
+        alert(
+          `장비 상태가 '${getStatusKorean(status)}'(으)로 변경되었습니다.\n수리 현황 탭에 자동으로 등록되었습니다.`
+        );
+      }
+
       resetForm();
     } catch (e: any) {
       alert("수정 실패: " + e.message);
     }
+  };
+
+  const getStatusKorean = (status: string): string => {
+    const labels: Record<string, string> = {
+      available: "사용 가능",
+      rented: "대여중",
+      repair: "수리중",
+      maintenance: "점검중",
+      broken: "파손",
+      lost: "분실",
+      retired: "폐기",
+    };
+    return labels[status] || status;
   };
 
   const handleDelete = async (id: Id<"assets">) => {

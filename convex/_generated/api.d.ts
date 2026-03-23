@@ -19,6 +19,11 @@ import type * as http from "../http.js";
 import type * as migration from "../migration.js";
 import type * as notifications from "../notifications.js";
 import type * as reservations from "../reservations.js";
+import type * as spaceAdmin from "../spaceAdmin.js";
+import type * as spaceDashboard from "../spaceDashboard.js";
+import type * as spaceNotifications from "../spaceNotifications.js";
+import type * as spaceReservations from "../spaceReservations.js";
+import type * as spaces from "../spaces.js";
 import type * as users from "../users.js";
 
 import type {
@@ -39,6 +44,11 @@ declare const fullApi: ApiFromModules<{
   migration: typeof migration;
   notifications: typeof notifications;
   reservations: typeof reservations;
+  spaceAdmin: typeof spaceAdmin;
+  spaceDashboard: typeof spaceDashboard;
+  spaceNotifications: typeof spaceNotifications;
+  spaceReservations: typeof spaceReservations;
+  spaces: typeof spaces;
   users: typeof users;
 }>;
 

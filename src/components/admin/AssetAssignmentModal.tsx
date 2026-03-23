@@ -61,12 +61,64 @@ export default function AssetAssignmentModal({
   useEffect(() => {
     if (isOpen && items) {
       const initial: { [key: string]: Id<"assets">[] } = {};
+      const UNAVAILABLE_STATUSES = ["repair", "maintenance", "broken", "lost", "retired"];
+      const removedAssets: Array<{ name: string; serialNumber: string; status: string }> = [];
+
+      // 상태 한글 변환 헬퍼 함수
+      const getStatusKorean = (status: string): string => {
+        const labels: Record<string, string> = {
+          repair: "수리중",
+          maintenance: "점검중",
+          broken: "파손",
+          lost: "분실",
+          retired: "폐기",
+        };
+        return labels[status] || status;
+      };
+
       items.forEach((item) => {
-        initial[item.equipmentId] = item.assignedAssets || [];
+        const originalAssets = item.assignedAssets || [];
+
+        // ✅ 수리중/파손/분실 등 UNAVAILABLE 상태인 장비 제외
+        const validAssets = originalAssets.filter((assetId) => {
+          const asset = allAssets?.find((a) => a._id === assetId);
+          if (!asset) return false;
+
+          const isUnavailable = UNAVAILABLE_STATUSES.includes(asset.status);
+          if (isUnavailable) {
+            removedAssets.push({
+              name: item.name,
+              serialNumber: asset.serialNumber || "번호없음",
+              status: asset.status,
+            });
+          }
+          return !isUnavailable;
+        });
+
+        initial[item.equipmentId] = validAssets;
+
+        // 🔍 디버깅: 전달받은 assignedAssets 확인
+        console.log(`[AssetAssignmentModal] ${item.name}:`, {
+          original: originalAssets,
+          valid: validAssets,
+          removed: originalAssets.length - validAssets.length,
+        });
       });
+
       setSelections(initial);
+      console.log("[AssetAssignmentModal] 초기 selections:", initial);
+
+      // ⚠️ 수리중 장비가 자동 제거된 경우 경고
+      if (removedAssets.length > 0) {
+        const message = removedAssets
+          .map((a) => `• ${a.name} ${a.serialNumber} (${getStatusKorean(a.status)})`)
+          .join("\n");
+        alert(
+          `⚠️ 다음 장비는 현재 사용 불가 상태로 자동 제외되었습니다:\n\n${message}\n\n대체 장비를 선택해주세요.`
+        );
+      }
     }
-  }, [isOpen, items]);
+  }, [isOpen, items, allAssets]);
 
   if (!isOpen) return null;
 

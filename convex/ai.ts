@@ -382,22 +382,24 @@ export const getRecommendation = httpAction(async (ctx, request) => {
       popularStats,
     });
 
-    // 5. Groq API 호출 (Llama 3.1 사용 - 무료!)
-    const groqApiKey = process.env.GROQ_API_KEY;
-    if (!groqApiKey) {
-      throw new Error("GROQ_API_KEY not configured");
+    // 5. OpenRouter API 호출 (Google Gemini Flash 1.5 - 최저가!)
+    const openrouterApiKey = process.env.OPENROUTER_API_KEY;
+    if (!openrouterApiKey) {
+      throw new Error("OPENROUTER_API_KEY not configured");
     }
 
-    const groqResponse = await fetch(
-      "https://api.groq.com/openai/v1/chat/completions",
+    const openrouterResponse = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${groqApiKey}`,
+          "Authorization": `Bearer ${openrouterApiKey}`,
+          "HTTP-Referer": "https://ssfilm-rental.vercel.app",
+          "X-Title": "SSFILM Equipment Rental",
         },
         body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
+          model: "google/gemini-2.5-flash",
           messages: [
             { role: "system", content: SYSTEM_PROMPT },
             { role: "user", content: prompt },
@@ -408,12 +410,12 @@ export const getRecommendation = httpAction(async (ctx, request) => {
       }
     );
 
-    if (!groqResponse.ok) {
-      const errorText = await groqResponse.text();
+    if (!openrouterResponse.ok) {
+      const errorText = await openrouterResponse.text();
 
       // Rate limit 에러 특별 처리
-      if (groqResponse.status === 429) {
-        console.error("🚨 Groq API Rate Limit 초과:", errorText);
+      if (openrouterResponse.status === 429) {
+        console.error("🚨 OpenRouter API Rate Limit 초과:", errorText);
 
         // 에러 메시지에서 대기 시간 추출
         const waitTimeMatch = errorText.match(/try again in ([\d.]+)s/);
@@ -422,15 +424,15 @@ export const getRecommendation = httpAction(async (ctx, request) => {
         throw new Error(`AI 서비스 요청이 너무 많습니다. ${waitTime}초 후 자동으로 재시도됩니다.`);
       }
 
-      throw new Error(`Groq API error: ${groqResponse.statusText} - ${errorText}`);
+      throw new Error(`OpenRouter API error: ${openrouterResponse.statusText} - ${errorText}`);
     }
 
-    const result = await groqResponse.json();
+    const result = await openrouterResponse.json();
 
     // 6. 응답 파싱 및 검증
     const content = result.choices?.[0]?.message?.content;
     if (!content) {
-      throw new Error("No content in Groq response");
+      throw new Error("No content in OpenRouter response");
     }
 
     // 중국어/일본어 문자 검증 및 자동 재시도
@@ -439,20 +441,22 @@ export const getRecommendation = httpAction(async (ctx, request) => {
       console.error("🚫 AI 응답에 중국어/일본어 문자 감지, 자동 재시도합니다...");
 
       // 재시도 (온도 낮춤)
-      const retryResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      const retryResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${groqApiKey}`,
+          "Authorization": `Bearer ${openrouterApiKey}`,
+          "HTTP-Referer": "https://ssfilm-rental.vercel.app",
+          "X-Title": "SSFILM Equipment Rental",
         },
         body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
+          model: "google/gemini-2.5-flash",
           messages: [
             { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: prompt } // 수정: userPrompt -> prompt
+            { role: "user", content: prompt }
           ],
           response_format: { type: "json_object" },
-          temperature: 0.3, // 온도를 낮춰서 더 일관된 응답
+          temperature: 0.3,
         }),
       });
 
@@ -552,7 +556,7 @@ function stepToCategory(step: string): string | undefined {
     tripod_grip: "Tripod",
     monitor: "Monitor",
     lighting: "Lighting",
-    stand: "Stand",
+    stand: "Lighting", // 스탠드는 조명 카테고리에 속함
     accessory: "ACC",
   };
   return mapping[step];
@@ -614,6 +618,13 @@ function buildPrompt(params: {
   };
 
   prompt += `${stepNames[step] || step}를 추천해주세요.`;
+
+  // stand 단계 특별 지시: 조명이 아닌 스탠드와 모래주머니만 추천
+  if (step === "stand") {
+    prompt += `\n\n⚠️ 중요: 조명 카테고리에서 스탠드(Stand)와 모래주머니(Sandbag)만 추천하세요. 조명(Light) 장비는 절대 추천하지 마세요.`;
+    prompt += `\n- 스탠드 1대당 모래주머니 1개를 반드시 함께 추천하세요.`;
+    prompt += `\n- 이전 단계에서 선택한 조명 수량을 확인하여 스탠드 수량을 결정하세요.`;
+  }
 
   return prompt;
 }

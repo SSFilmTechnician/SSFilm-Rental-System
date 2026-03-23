@@ -548,16 +548,46 @@ export default function AdminDashboard() {
 
   const handleItemQuantityChange = (eqId: string, delta: number) => {
     const eq = allEquipment?.find((e) => e._id === eqId);
-    const maxQty = eq?.totalQuantity ?? 999;
+    if (!eq) return;
+
+    // 현재 편집 중인 예약 정보
+    const currentReservation = reservations?.find(
+      (r) => r._id === editingReservationId
+    );
+    if (!currentReservation) return;
+
+    // 해당 날짜 범위에서 다른 예약들이 점유한 수량 계산
+    const otherReservations = reservations?.filter(
+      (r) =>
+        r._id !== editingReservationId &&
+        (r.status === "approved" || r.status === "rented") &&
+        r.startDate < currentReservation.endDate &&
+        r.endDate > currentReservation.startDate
+    ) || [];
+
+    const occupiedQty = otherReservations.reduce((sum, r) => {
+      const item = r.items.find((i) => String(i.equipmentId) === String(eqId));
+      return sum + (item?.quantity || 0);
+    }, 0);
+
+    // 가용 재고 = 총 보유량 - 다른 예약 점유량
+    const availableQty = eq.totalQuantity - occupiedQty;
+    const maxQty = Math.max(1, availableQty);
+
     setEditingItems((prev) =>
-      prev.map((i) =>
-        i.equipmentId === eqId
-          ? {
-              ...i,
-              quantity: Math.min(maxQty, Math.max(1, i.quantity + delta)),
-            }
-          : i,
-      ),
+      prev.map((i) => {
+        if (i.equipmentId === eqId) {
+          const newQuantity = Math.max(1, i.quantity + delta);
+          if (newQuantity > maxQty) {
+            alert(
+              `${eq.name}의 가용 재고는 ${maxQty}개입니다.\n(보유: ${eq.totalQuantity}개, 다른 예약: ${occupiedQty}개)`
+            );
+            return i;
+          }
+          return { ...i, quantity: newQuantity };
+        }
+        return i;
+      })
     );
   };
 
@@ -574,6 +604,35 @@ export default function AdminDashboard() {
     if (editingItems.find((i) => i.equipmentId === eq._id)) {
       return alert("이미 목록에 있습니다.");
     }
+
+    // 현재 편집 중인 예약 정보
+    const currentReservation = reservations?.find(
+      (r) => r._id === editingReservationId
+    );
+    if (!currentReservation) return;
+
+    // 해당 날짜 범위에서 다른 예약들이 점유한 수량 계산
+    const otherReservations = reservations?.filter(
+      (r) =>
+        r._id !== editingReservationId &&
+        (r.status === "approved" || r.status === "rented") &&
+        r.startDate < currentReservation.endDate &&
+        r.endDate > currentReservation.startDate
+    ) || [];
+
+    const occupiedQty = otherReservations.reduce((sum, r) => {
+      const item = r.items.find((i) => String(i.equipmentId) === String(eq._id));
+      return sum + (item?.quantity || 0);
+    }, 0);
+
+    const availableQty = eq.totalQuantity - occupiedQty;
+
+    if (availableQty < 1) {
+      return alert(
+        `${eq.name}의 가용 재고가 부족합니다.\n(보유: ${eq.totalQuantity}개, 다른 예약: ${occupiedQty}개)`
+      );
+    }
+
     setEditingItems((prev) => [
       ...prev,
       { equipmentId: eq._id, name: eq.name, quantity: 1 },
@@ -585,13 +644,26 @@ export default function AdminDashboard() {
   const handleSaveEditedItems = async () => {
     if (!editingReservationId) return;
     try {
+      // ✅ 기존 예약 데이터에서 assignedAssets 보존
+      const currentReservation = reservations?.find(
+        (r) => r._id === editingReservationId
+      );
+
       await updateResItems({
         id: editingReservationId,
-        items: editingItems.map((i) => ({
-          ...i,
-          checkedOut: false,
-          returned: false,
-        })),
+        items: editingItems.map((i) => {
+          // 기존 예약에서 같은 장비의 assignedAssets 찾기
+          const existingItem = currentReservation?.items.find(
+            (oldItem) => String(oldItem.equipmentId) === String(i.equipmentId)
+          );
+
+          return {
+            ...i,
+            checkedOut: false,
+            returned: false,
+            assignedAssets: existingItem?.assignedAssets || [],
+          };
+        }),
       });
       setIsEditModalOpen(false);
       alert("수정되었습니다.");
@@ -1303,41 +1375,72 @@ export default function AdminDashboard() {
 
             {/* 장비 목록 (스크롤) */}
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
-              {editingItems.map((item) => (
-                <div
-                  key={item.equipmentId}
-                  className="flex justify-between items-center border p-2 rounded"
-                >
-                  <span className="text-sm">{item.name}</span>
-                  <div className="flex gap-2 items-center">
-                    <button
-                      onClick={() =>
-                        handleItemQuantityChange(item.equipmentId, -1)
-                      }
-                      className="p-1 bg-gray-100 rounded"
-                    >
-                      <Minus className="w-3 h-3" />
-                    </button>
-                    <span className="w-6 text-center text-sm font-bold">
-                      {item.quantity}
-                    </span>
-                    <button
-                      onClick={() =>
-                        handleItemQuantityChange(item.equipmentId, 1)
-                      }
-                      className="p-1 bg-gray-100 rounded"
-                    >
-                      <Plus className="w-3 h-3" />
-                    </button>
-                    <button
-                      onClick={() => handleItemRemove(item.equipmentId)}
-                      className="text-red-500 ml-2"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+              {editingItems.map((item) => {
+                // 가용 재고 계산
+                const eq = allEquipment?.find((e) => e._id === item.equipmentId);
+                const currentReservation = reservations?.find(
+                  (r) => r._id === editingReservationId
+                );
+
+                let availableQty = eq?.totalQuantity || 0;
+                if (currentReservation) {
+                  const otherReservations = reservations?.filter(
+                    (r) =>
+                      r._id !== editingReservationId &&
+                      (r.status === "approved" || r.status === "rented") &&
+                      r.startDate < currentReservation.endDate &&
+                      r.endDate > currentReservation.startDate
+                  ) || [];
+
+                  const occupiedQty = otherReservations.reduce((sum, r) => {
+                    const i = r.items.find((i) => String(i.equipmentId) === String(item.equipmentId));
+                    return sum + (i?.quantity || 0);
+                  }, 0);
+
+                  availableQty = (eq?.totalQuantity || 0) - occupiedQty;
+                }
+
+                return (
+                  <div
+                    key={item.equipmentId}
+                    className="flex justify-between items-center border p-2 rounded"
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">{item.name}</span>
+                      <span className="text-xs text-gray-500">
+                        가용: {availableQty}개 / 보유: {eq?.totalQuantity || 0}개
+                      </span>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <button
+                        onClick={() =>
+                          handleItemQuantityChange(item.equipmentId, -1)
+                        }
+                        className="p-1 bg-gray-100 rounded"
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <span className="w-6 text-center text-sm font-bold">
+                        {item.quantity}
+                      </span>
+                      <button
+                        onClick={() =>
+                          handleItemQuantityChange(item.equipmentId, 1)
+                        }
+                        className="p-1 bg-gray-100 rounded"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => handleItemRemove(item.equipmentId)}
+                        className="text-red-500 ml-2"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* 장비 추가 영역 */}
@@ -1395,23 +1498,42 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {assigningReservation && (
-        <AssetAssignmentModal
-          key={assigningReservation._id}
-          isOpen={isAssignModalOpen}
-          onClose={() => {
-            setIsAssignModalOpen(false);
-            setAssigningReservation(null);
-          }}
-          reservationId={assigningReservation._id}
-          items={assigningReservation.items}
-          onAssignComplete={async () => {
-            await handleStatusChange(assigningReservation._id, "approved");
-            setIsAssignModalOpen(false);
-            setAssigningReservation(null);
-          }}
-        />
-      )}
+      {assigningReservation && (() => {
+        // 🔍 디버깅: 전달하는 items 확인
+        const latestReservation = reservations?.find(
+          (r) => r._id === assigningReservation._id
+        );
+        const itemsToPass = latestReservation?.items || assigningReservation.items;
+
+        console.log("[AdminDashboard] 장비 배정 모달 열기:", {
+          reservationId: assigningReservation._id,
+          usingLatestData: !!latestReservation,
+          itemsCount: itemsToPass.length,
+          itemsDetail: itemsToPass.map((i) => ({
+            name: i.name,
+            assignedAssets: i.assignedAssets,
+            count: i.assignedAssets?.length || 0,
+          })),
+        });
+
+        return (
+          <AssetAssignmentModal
+            key={assigningReservation._id}
+            isOpen={isAssignModalOpen}
+            onClose={() => {
+              setIsAssignModalOpen(false);
+              setAssigningReservation(null);
+            }}
+            reservationId={assigningReservation._id}
+            items={itemsToPass}
+            onAssignComplete={async () => {
+              await handleStatusChange(assigningReservation._id, "approved");
+              setIsAssignModalOpen(false);
+              setAssigningReservation(null);
+            }}
+          />
+        );
+      })()}
       {returningReservation && (
         <AssetReturnModal
           key={returningReservation._id}

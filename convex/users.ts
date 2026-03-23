@@ -25,6 +25,17 @@ export const getMyProfile = query({
   },
 });
 
+// ✅ [NEW] Clerk ID로 사용자 조회 (공간 예약 알림용)
+export const getUserByClerkId = query({
+  args: { clerkId: v.string() },
+  handler: async (ctx, { clerkId }) => {
+    return await ctx.db
+      .query("users")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", clerkId))
+      .first();
+  },
+});
+
 // ✅ [NEW] 장비리스트 저장하기
 export const saveCart = mutation({
   args: { cartJson: v.string() },

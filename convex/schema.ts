@@ -141,13 +141,14 @@ export default defineSchema({
     .index("by_assetId", ["assetId"])
     .index("by_reservationId", ["reservationId"]),
 
-  // 8. 알림 테이블
+  // 8. 알림 테이블 (장비 예약 + 공간 예약 통합)
   notifications: defineTable({
     userId: v.id("users"),
     type: v.string(),
     title: v.string(),
     message: v.string(),
     relatedId: v.optional(v.id("reservations")),
+    relatedSpaceReservationId: v.optional(v.id("spaceReservations")),
     read: v.boolean(),
     readAt: v.optional(v.number()),
   })
@@ -203,4 +204,56 @@ export default defineSchema({
     .index("by_targetId", ["targetId", "timestamp"])
     .index("by_batchId", ["batchId"])
     .index("by_version", ["versionMajor", "versionMinor"]),
+
+  // ===== 공간 대여 시스템 테이블 =====
+
+  // 11. 공간 테이블
+  spaces: defineTable({
+    name: v.string(), // "마스터링룸1", "마스터링룸2", "스튜디오", "회의실", "믹싱룸/ADR룸", "과방", "편집실"
+    requiresApproval: v.boolean(), // true: 믹싱룸/ADR룸만, false: 나머지 6개
+    isActive: v.boolean(), // 공간 활성/비활성
+    description: v.optional(v.string()), // 공간 설명
+    order: v.number(), // 정렬 순서
+  }),
+
+  // 12. 공간 예약 테이블
+  spaceReservations: defineTable({
+    userId: v.string(), // Clerk userId
+    userName: v.string(), // 예약자 이름
+    userStudentId: v.string(), // 학번
+    userEmail: v.string(), // 이메일
+    spaceId: v.id("spaces"), // 공간 참조
+    date: v.string(), // "2026-03-09" 형식
+    startHour: v.number(), // 시작 시간 (0~23)
+    endHour: v.number(), // 종료 시간 (1~24, exclusive)
+    purpose: v.string(), // 예약 목적 (드롭다운 선택값)
+    purposeDetail: v.string(), // 예약 상세 목적
+    companions: v.optional(v.string()), // 동행인
+    status: v.string(), // "confirmed" | "pending" | "rejected" | "cancelled"
+    rejectionReason: v.optional(v.string()), // 거절 사유
+    createdAt: v.number(), // 생성 시간 (timestamp)
+  })
+    .index("by_space_date", ["spaceId", "date"])
+    .index("by_user_date", ["userId", "date"])
+    .index("by_status", ["status"])
+    .index("by_date", ["date"]),
+
+  // 13. 패널티 테이블
+  spacePenalties: defineTable({
+    userId: v.string(),
+    spaceId: v.id("spaces"),
+    reason: v.string(), // 패널티 사유
+    count: v.number(), // 누적 횟수
+    blockedUntil: v.optional(v.number()), // 차단 해제 시간 (3회 누적 시 일주일 폐쇄)
+    createdAt: v.number(),
+  }).index("by_user_space", ["userId", "spaceId"]),
+
+  // 14. 역할 테이블 (공간 관리자 권한 추가)
+  userRoles: defineTable({
+    userId: v.string(), // Clerk userId
+    role: v.string(), // "admin" | "mixing_manager" | "user"
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_role", ["role"]),
 });

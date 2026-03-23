@@ -19,10 +19,10 @@ export const getRecommendations = action({
     ),
   },
   handler: async (_ctx, args) => {
-    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-    if (!OPENAI_API_KEY) {
-      console.error("OpenAI API key not configured");
+    if (!OPENROUTER_API_KEY) {
+      console.error("OpenRouter API key not configured");
       // Return fallback recommendations based on rules
       return getFallbackRecommendations(args);
     }
@@ -92,14 +92,16 @@ ${JSON.stringify(args.availableEquipment.slice(0, 50), null, 2)}
 8. 한국어로 설명`;
 
     try {
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+          "HTTP-Referer": "https://ssfilm-rental.vercel.app",
+          "X-Title": "SSFILM Equipment Rental",
         },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
+          model: "google/gemini-2.5-flash",
           messages: [
             { role: "system", content: systemPrompt },
             {
@@ -114,7 +116,7 @@ ${JSON.stringify(args.availableEquipment.slice(0, 50), null, 2)}
       });
 
       if (!response.ok) {
-        console.error(`OpenAI API error: ${response.status}`);
+        console.error(`OpenRouter API error: ${response.status}`);
         return getFallbackRecommendations(args);
       }
 
@@ -161,7 +163,7 @@ ${JSON.stringify(args.availableEquipment.slice(0, 50), null, 2)}
         warnings: result.warnings || [],
       };
     } catch (error) {
-      console.error("Error calling OpenAI:", error);
+      console.error("Error calling OpenRouter:", error);
       return getFallbackRecommendations(args);
     }
   },

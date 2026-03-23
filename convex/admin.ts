@@ -202,6 +202,14 @@ export const updateReservationStatus = mutation({
 
       const newItems = await Promise.all(
         reservation.items.map(async (item) => {
+          // ✅ 이미 수동으로 배정된 경우 자동 배정 건너뛰기
+          if (
+            item.assignedAssets &&
+            item.assignedAssets.length === item.quantity
+          ) {
+            return item; // 기존 배정 유지
+          }
+
           const allAssets = await ctx.db
             .query("assets")
             .withIndex("by_equipmentId", (q) =>
@@ -340,7 +348,7 @@ export const updateReservationStatus = mutation({
   },
 });
 
-// 5. [수리] 목록 가져오기
+// 5. [수리] 목록 가져오기 (repairs 테이블 + assets 테이블의 수리중 장비 통합)
 export const getRepairs = query({
   args: {
     status: v.optional(v.string()),
@@ -355,7 +363,7 @@ export const getRepairs = query({
       filtered = repairs.filter((r) => r.stage === "completed" || r.isFixed);
     }
 
-    return await Promise.all(
+    const repairsWithDetails = await Promise.all(
       filtered.map(async (r) => {
         let reservationNumber = "-";
         let leaderName = r.studentName;
@@ -370,6 +378,60 @@ export const getRepairs = query({
         return { ...r, reservationNumber, leaderName };
       }),
     );
+
+    // ✅ assets 테이블에서 수리중/점검중/파손/분실 상태인 장비도 포함
+    const UNAVAILABLE_STATUSES = ["repair", "maintenance", "broken", "lost"];
+    const allAssets = await ctx.db.query("assets").collect();
+    const unavailableAssets = allAssets.filter((a) =>
+      UNAVAILABLE_STATUSES.includes(a.status),
+    );
+
+    // repairs 테이블에 이미 등록된 assetId 수집 (중복 방지)
+    const registeredAssetIds = new Set(
+      repairsWithDetails
+        .filter((r) => r.assetId)
+        .map((r) => r.assetId as string),
+    );
+
+    // repairs 테이블에 없는 수리중 장비들을 가상 repair 레코드로 추가
+    const virtualRepairs = unavailableAssets
+      .filter((asset) => !registeredAssetIds.has(asset._id))
+      .map((asset) => ({
+        _id: `virtual_${asset._id}`,
+        _creationTime: asset.createdAt || Date.now(),
+        equipmentId: asset.equipmentId,
+        assetId: asset._id,
+        equipmentName: asset.equipmentName || "Unknown",
+        serialNumber: asset.serialNumber || "번호없음",
+        studentName: undefined,
+        studentPhone: undefined,
+        reservationId: undefined,
+        stage: "damage_confirmed" as const,
+        damageType: (asset.status === "lost" ? "lost" : "damaged") as "lost" | "damaged",
+        damageDescription: asset.note || "장비 관리에서 상태 변경됨 (자동 생성)",
+        damageConfirmedAt: asset.updatedAt || asset.createdAt || Date.now(),
+        isFixed: false,
+        createdAt: asset.createdAt || Date.now(),
+        updatedAt: asset.updatedAt || Date.now(),
+        reservationNumber: "-",
+        leaderName: undefined,
+        // 가상 레코드 표시용
+        isVirtual: true,
+        currentStatus: asset.status,
+      }));
+
+    // repairs 테이블 데이터 + 가상 레코드 통합
+    const combined = [...repairsWithDetails, ...virtualRepairs];
+
+    // 필터링 (in_progress일 때는 가상 레코드도 포함)
+    if (args.status === "in_progress") {
+      return combined.filter((r) => r.stage !== "completed" && !r.isFixed);
+    } else if (args.status === "completed") {
+      // 완료된 것만 (가상 레코드 제외)
+      return combined.filter((r) => !(r as typeof virtualRepairs[0]).isVirtual && (r.stage === "completed" || r.isFixed));
+    }
+
+    return combined;
   },
 });
 
@@ -558,7 +620,28 @@ export const updateReservationItems = mutation({
       }
     }
 
-    await ctx.db.patch(args.id, { items: args.items });
+    // ✅ 기존 assignedAssets, checkedOut, returned 보존하면서 items 업데이트
+    const updatedItems = args.items.map((newItem) => {
+      // 기존 예약에서 같은 equipmentId를 가진 항목 찾기
+      const existingItem = reservation.items.find(
+        (oldItem) => String(oldItem.equipmentId) === String(newItem.equipmentId)
+      );
+
+      // 기존 항목이 있으면 배정 정보 및 상태 보존, 없으면 초기값
+      const itemWithStates = newItem as typeof newItem & {
+        checkedOut?: boolean;
+        returned?: boolean;
+      };
+
+      return {
+        ...newItem,
+        assignedAssets: existingItem?.assignedAssets || [],
+        checkedOut: existingItem?.checkedOut ?? itemWithStates.checkedOut ?? false,
+        returned: existingItem?.returned ?? itemWithStates.returned ?? false,
+      };
+    });
+
+    await ctx.db.patch(args.id, { items: updatedItems });
   },
 });
 

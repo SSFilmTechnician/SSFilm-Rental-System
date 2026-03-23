@@ -2,10 +2,17 @@ import { useAIWizard } from "../AIWizardProvider";
 import { ChevronLeft, CheckCircle2, ShoppingCart, Calendar, Users, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { EquipmentSelection } from "../types";
+import { useCartStore } from "../../../stores/useCartStore";
+import { useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
 
 export default function StepSummary() {
   const { state, dispatch } = useAIWizard();
   const navigate = useNavigate();
+  const { addItem } = useCartStore();
+
+  // 모든 장비 정보 조회 (이미지 URL 포함)
+  const allEquipment = useQuery(api.equipment.getAll);
 
   // 모든 선택된 장비 수집
   const allSelections: Array<{ category: string; items: EquipmentSelection[] }> = [
@@ -36,22 +43,39 @@ export default function StepSummary() {
   };
 
   const handleAddToCart = () => {
-    // TODO: 실제 장비리스트 연동
-    // 여기서는 일단 로컬스토리지나 전역 상태에 저장하고
-    // 예약 페이지로 이동하는 로직 구현
+    // 장비 정보가 아직 로딩 중이면 대기
+    if (!allEquipment) {
+      alert("장비 정보를 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
+      return;
+    }
 
-    // 임시: 콘솔에 출력
+    // 모든 선택된 장비를 장바구니에 추가
+    allSelections.forEach((category) => {
+      category.items.forEach((item) => {
+        // equipmentId로 실제 장비 정보 찾기
+        const equipment = allEquipment.find((eq) => eq._id === item.equipmentId);
+
+        addItem({
+          equipmentId: item.equipmentId,
+          name: item.equipmentName,
+          category: category.category,
+          quantity: item.quantity,
+          imageUrl: equipment?.imageUrl, // 실제 장비의 이미지 URL 사용
+        });
+      });
+    });
+
     console.log("장비리스트에 담을 장비:", {
       date: state.basicInfo.date,
       crewSize: state.basicInfo.crewSize,
       selections: allSelections,
     });
 
-    alert("장비가 장비리스트에 담겼습니다!");
+    alert(`총 ${totalItems}개의 장비가 장비리스트에 담겼습니다!`);
 
-    // 위자드 닫기 및 예약 페이지로 이동
+    // 위자드 닫기 및 장바구니 페이지로 이동
     dispatch({ type: "RESET" });
-    navigate("/reservation");
+    navigate("/cart");
   };
 
   const handleReset = () => {

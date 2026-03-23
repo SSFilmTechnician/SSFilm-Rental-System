@@ -19,7 +19,7 @@ import {
 type RepairTab = "in_progress" | "completed";
 
 interface RepairData {
-  _id: Id<"repairs">;
+  _id: Id<"repairs"> | string; // string for virtual repairs
   reservationId?: Id<"reservations">;
   reservationNumber?: string;
   equipmentName?: string;
@@ -47,6 +47,12 @@ interface RepairData {
   adminMemo?: string;
   createdAt: number;
   isFixed: boolean;
+
+  // Virtual repair fields
+  isVirtual?: boolean;
+  currentStatus?: string;
+  equipmentId?: Id<"equipment">;
+  assetId?: Id<"assets">;
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -168,11 +174,18 @@ export default function RepairManagement() {
                     className={`p-4 cursor-pointer hover:bg-gray-50 transition-colors border-l-4 ${selectedRepairId === item._id ? "bg-blue-50 border-blue-500" : "border-transparent"}`}
                   >
                     <div className="flex justify-between items-start mb-2">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${getStageColor(item.stage)}`}
-                      >
-                        {STAGE_LABELS[item.stage] || item.stage}
-                      </span>
+                      <div className="flex gap-1.5 flex-wrap">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${getStageColor(item.stage)}`}
+                        >
+                          {STAGE_LABELS[item.stage] || item.stage}
+                        </span>
+                        {item.isVirtual && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-yellow-50 text-yellow-700 border border-yellow-200">
+                            미등록
+                          </span>
+                        )}
+                      </div>
                       <span className="text-xs text-gray-400">
                         {formatDate(item.createdAt)}
                       </span>
@@ -229,6 +242,7 @@ function RepairDetailPanel({
   const updatePayment = useMutation(api.admin.updateRepairPaymentConfirmed);
   const complete = useMutation(api.admin.completeRepair);
   const revert = useMutation(api.admin.revertRepairStage);
+  const createRepair = useMutation(api.admin.createRepair);
 
   // 로딩 상태
   const [isLoading, setIsLoading] = useState(false);
@@ -264,7 +278,7 @@ function RepairDetailPanel({
 
   const handleEstimate = async () => {
     if (!estimateMemo.trim()) {
-      alert("견적서 내용을 입력해주세요.");
+      alert("견적서 및 수리사항 내용을 입력해주세요.");
       return;
     }
     setIsLoading(true);
@@ -304,6 +318,31 @@ function RepairDetailPanel({
     }
   };
 
+  const handleConvertVirtualRepair = async () => {
+    if (!repair.isVirtual) return;
+    if (!confirm("이 장비를 수리 현황에 정식 등록하시겠습니까?")) return;
+
+    setIsLoading(true);
+    try {
+      await createRepair({
+        equipmentId: repair.equipmentId,
+        assetId: repair.assetId,
+        equipmentName: repair.equipmentName,
+        serialNumber: repair.serialNumber,
+        studentName: repair.studentName,
+        studentPhone: repair.studentPhone,
+        damageType: repair.damageType,
+        damageDescription: repair.damageDescription,
+      });
+      alert("수리 현황에 등록되었습니다. 이제 워크플로우를 진행할 수 있습니다.");
+      onClose(); // Close the panel to refresh
+    } catch (error) {
+      alert("등록 실패: " + error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const steps = [
     "damage_confirmed",
     "charge_decided",
@@ -333,7 +372,14 @@ function RepairDetailPanel({
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <h3 className="font-bold text-lg">수리 상세 정보</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-lg">수리 상세 정보</h3>
+            {repair.isVirtual && (
+              <span className="px-2 py-1 rounded text-xs font-bold bg-yellow-100 text-yellow-700 border border-yellow-300">
+                자동생성 (미등록)
+              </span>
+            )}
+          </div>
         </div>
         <button
           onClick={onDelete}
@@ -413,64 +459,90 @@ function RepairDetailPanel({
             )}
           </div>
           {repair.stage === "damage_confirmed" ? (
-            <div className="bg-white p-4 rounded-lg border shadow-sm space-y-4">
-              <p className="text-sm text-gray-600">
-                수리비 부담 주체를 선택하세요.
-              </p>
-              <div className="flex gap-3">
-                <label
-                  className={`flex-1 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                    chargeType === "student_charge"
-                      ? "border-orange-500 bg-orange-50"
-                      : "border-gray-200 hover:border-gray-300"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    className="sr-only"
-                    checked={chargeType === "student_charge"}
-                    onChange={() => setChargeType("student_charge")}
-                  />
-                  <div className="text-center">
-                    <div className="font-bold text-sm">학생 부담</div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      학생이 수리비 부담
-                    </div>
+            repair.isVirtual ? (
+              <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200 shadow-sm space-y-4">
+                <div className="flex items-start gap-2 text-sm text-yellow-800">
+                  <FileText className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-bold mb-1">자동 생성된 수리 내역</p>
+                    <p className="text-xs text-yellow-700 leading-relaxed">
+                      이 내역은 장비 관리에서 상태를 변경하여 자동으로 생성되었습니다.
+                      워크플로우를 진행하려면 먼저 정식으로 등록해야 합니다.
+                    </p>
                   </div>
-                </label>
-                <label
-                  className={`flex-1 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                    chargeType === "department_handle"
-                      ? "border-orange-500 bg-orange-50"
-                      : "border-gray-200 hover:border-gray-300"
-                  }`}
+                </div>
+                <button
+                  onClick={handleConvertVirtualRepair}
+                  disabled={isLoading}
+                  className="w-full bg-orange-500 text-white py-2.5 rounded-lg text-sm font-bold hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  <input
-                    type="radio"
-                    className="sr-only"
-                    checked={chargeType === "department_handle"}
-                    onChange={() => setChargeType("department_handle")}
-                  />
-                  <div className="text-center">
-                    <div className="font-bold text-sm">학과 처리</div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      학과 예산으로 처리
-                    </div>
-                  </div>
-                </label>
+                  {isLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "수리 현황에 정식 등록하기"
+                  )}
+                </button>
               </div>
-              <button
-                onClick={handleCharge}
-                disabled={isLoading}
-                className="w-full bg-orange-500 text-white py-2.5 rounded-lg text-sm font-bold hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  "결정 완료"
-                )}
-              </button>
-            </div>
+            ) : (
+              <div className="bg-white p-4 rounded-lg border shadow-sm space-y-4">
+                <p className="text-sm text-gray-600">
+                  수리비 부담 주체를 선택하세요.
+                </p>
+                <div className="flex gap-3">
+                  <label
+                    className={`flex-1 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                      chargeType === "student_charge"
+                        ? "border-orange-500 bg-orange-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      className="sr-only"
+                      checked={chargeType === "student_charge"}
+                      onChange={() => setChargeType("student_charge")}
+                    />
+                    <div className="text-center">
+                      <div className="font-bold text-sm">학생 부담</div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        학생이 수리비 부담
+                      </div>
+                    </div>
+                  </label>
+                  <label
+                    className={`flex-1 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                      chargeType === "department_handle"
+                        ? "border-orange-500 bg-orange-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      className="sr-only"
+                      checked={chargeType === "department_handle"}
+                      onChange={() => setChargeType("department_handle")}
+                    />
+                    <div className="text-center">
+                      <div className="font-bold text-sm">학과 처리</div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        학과 예산으로 처리
+                      </div>
+                    </div>
+                  </label>
+                </div>
+                <button
+                  onClick={handleCharge}
+                  disabled={isLoading}
+                  className="w-full bg-orange-500 text-white py-2.5 rounded-lg text-sm font-bold hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "결정 완료"
+                  )}
+                </button>
+              </div>
+            )
           ) : (
             currentStepIdx >= 1 && (
               <div className="bg-orange-50 p-4 rounded-lg border border-orange-100 text-sm">
